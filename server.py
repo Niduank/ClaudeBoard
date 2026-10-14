@@ -696,6 +696,7 @@ end repeat'''}
 KEY_TEXT = {"escape": "\x1b", "arrowRight": "\x1b[C"}
 GHOSTTY_DIGIT = "numpad{}"  # Ghostty's `input text` is a paste, which a dialog ignores for a choice
 _answer_lock = threading.Lock()  # answers run one at a time, so the check on _answered below cannot race
+# ponytail: one lock for every session: a hung terminal delays the others, per-terminal locks if that bites
 # ponytail: (session, at) of dialogs already answered, kept for the process life (a few bytes each); trim if the server runs for months
 _answered = set()
 NEW = {"ghostty": '''on run argv
@@ -780,6 +781,7 @@ def _answer(pid, at, response):
     if error:
         return error
     app, terminal_id, still_open = target
+    # ponytail: only the status is re-read, not the dialog's at: a dialog replaced within this window would get the keys
     if not still_open:  # the status left "waiting" since the first scan
         return 409, ("answer_changed", {})
     if app == "ghostty":

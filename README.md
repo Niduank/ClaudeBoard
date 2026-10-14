@@ -260,7 +260,11 @@ Four values come from the environment, which `install.sh` writes under `Environm
 - Every POST needs a per-launch random token embedded in the page; a stale page reloads itself.
 - Replies are typed into the terminal as an argv item, never interpolated into a script; each send is logged
   (time, session, terminal, never the text) in `server.log`; so is each answer (`answer pid=… … ok=…`, never option labels).
-- An answer must carry the open dialog's `at`: one already answered or replaced is refused, never typed into the next dialog.
+- An answer must carry the `at` of the dialog the page shows; it is refused unless that is still the session's latest hook
+  write, not yet answered from the page (once per dialog), and the session still `waiting`. Limits: when several
+  permissions are asked at once (parallel tool calls), the page shows the last one while the terminal may show another,
+  so it offers *Deny* only; a dialog that wrote no hook file, opened within 5 s of the previous one, could show that
+  previous dialog.
 - Summaries run `claude -p` with Haiku, no tools, no user settings, hooks, plugins or MCP servers, and no session persistence.
 - The page shows prompts and answers of every session: anyone who can open it can read them.
 - The dialog hook only writes what a dialog asks to `dialogs/` (in the repo, git-ignored); it prints nothing,
