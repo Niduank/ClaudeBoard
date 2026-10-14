@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<!-- logo.svg, Claude Dashboard. Created by Kévin Naudin on 14/10/2026. Four session states: running, waiting with an answer, question, idle -->
+<defs><linearGradient id="tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d2b28"/><stop offset="1" stop-color="#151413"/></linearGradient></defs>
+<rect width="64" height="64" rx="14" fill="url(#tile)"/>
+<rect x=".5" y=".5" width="63" height="63" rx="13.5" fill="none" stroke="#ffffff" stroke-opacity=".09"/>
+<rect x="11" y="11" width="19" height="19" rx="5" fill="#4ade80"/>
+<rect x="34" y="11" width="19" height="19" rx="5" fill="#fb923c"/>
+<path d="M38.5 18.5h10M38.5 23h6" stroke="#35210f" stroke-width="2.4" stroke-linecap="round"/>
+<rect x="11" y="34" width="19" height="19" rx="5" fill="#a78bfa"/>
+<rect x="34" y="34" width="19" height="19" rx="5" fill="#3a3733"/>
+</svg>

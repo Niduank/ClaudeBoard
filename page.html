@@ -1,0 +1,1029 @@
+<!doctype html>
+<!--
+  page.html
+  ClaudeDashboard
+
+  Created by Kévin Naudin on 11/10/2026.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#111110">
+<title>Claude Dashboard</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" id="favicon" href="/icon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+:root {
+  --bg: #f4f3ef; --surface: #ffffff; --surface-2: #f8f7f4; --text: #1a1915; --muted: #6f6c64; --faint: #a19d93;
+  --line: #e6e3db; --line-strong: #d6d2c7; --shadow: 0 1px 2px rgba(26,25,21,.05), 0 4px 16px rgba(26,25,21,.04);
+  --run: #15803d; --run-soft: #e3f4e8; --wait: #c2410c; --wait-soft: #fdeee4; --idle: #8a867c; --idle-soft: #efede7;
+  --ask: #7c3aed; --ask-soft: #efe7fd; --test: #0e7490; --test-soft: #e0f4f8; --new: #2563eb; --code: #f1efe9; --focus: #2563eb; --bar: #e6e3db;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111110; --surface: #1b1a18; --surface-2: #211f1d; --text: #ecebe6; --muted: #a29e94; --faint: #6f6b63;
+    --line: #2b2926; --line-strong: #3a3733; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
+    --run: #4ade80; --run-soft: #16301f; --wait: #fb923c; --wait-soft: #35210f; --idle: #8a867c; --idle-soft: #262421;
+    --ask: #a78bfa; --ask-soft: #271d3d; --test: #22d3ee; --test-soft: #0f2a30; --new: #60a5fa; --code: #262421; --focus: #60a5fa; --bar: #2f2d2a; }
+}
+* { box-sizing: border-box; }
+/* author display rules (.drawer flex, .chip inline-flex) would otherwise beat the hidden attribute */
+[hidden] { display: none !important; }
+html { -webkit-font-smoothing: antialiased; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif; }
+.wrap { max-width: 1480px; margin: 0 auto; padding: 32px 32px 64px; }
+.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+h1 { font-size: 26px; letter-spacing: -.02em; margin: 0; font-weight: 650; }
+.sub { color: var(--muted); margin-top: 4px; }
+.sub kbd { font: 11px ui-monospace, "SF Mono", Menlo, monospace; border: 1px solid var(--line-strong); border-bottom-width: 2px;
+  border-radius: 4px; padding: 0 4px; color: var(--text); }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 24px; }
+.search { flex: 1 1 260px; min-width: 0; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 10px; padding: 8px 12px; outline: none; }
+.search:focus { border-color: var(--focus); }
+.chip { display: inline-flex; gap: 7px; align-items: center; cursor: pointer; user-select: none; padding: 7px 12px; font: inherit;
+  font-size: 13px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.chip:has(input:checked) { color: var(--text); border-color: var(--line-strong); }
+.chip input { margin: 0; }
+button.chip:hover { color: var(--text); }
+.lang { display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.lang button { font: inherit; font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--muted); background: none; border: 0;
+  border-radius: 999px; padding: 4px 11px; cursor: pointer; }
+.lang button:hover { color: var(--text); }
+.lang button[aria-pressed="true"] { color: var(--bg); background: var(--text); }
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 36px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; box-shadow: var(--shadow); }
+.kpi b { display: block; font-size: 30px; line-height: 1.1; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.kpi span { color: var(--muted); font-size: 13px; }
+.kpi.run b { color: var(--run); } .kpi.wait b { color: var(--wait); } .kpi.ask b { color: var(--ask); } .kpi.test b { color: var(--test); }
+section { margin-bottom: 40px; }
+h2 { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted); margin: 0 0 14px; }
+h2 .count { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 0 8px;
+  font-size: 12px; letter-spacing: 0; color: var(--text); font-variant-numeric: tabular-nums; }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); align-items: start; }
+.card { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px 16px;
+  box-shadow: var(--shadow); cursor: pointer; transition: border-color .15s, transform .15s; min-width: 0; overflow: hidden; }
+.card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--accent, transparent); }
+.card:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+.card:focus-visible, .row:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.card.nofocus { cursor: default; }
+.head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 2px 9px 2px 8px; border-radius: 999px; }
+.pill i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.run { color: var(--run); background: var(--run-soft); }
+.pill.run i { animation: pulse 1.6s ease-in-out infinite; }
+.pill.wait { color: var(--wait); background: var(--wait-soft); }
+.pill.idle { color: var(--idle); background: var(--idle-soft); }
+.pill.ask { color: var(--ask); background: var(--ask-soft); }
+.pill.test { color: var(--test); background: var(--test-soft); }
+.pill.frozen { color: var(--idle); background: var(--idle-soft); }
+.pill.frozen i { background: none; border: 1.5px solid currentColor; width: 6px; height: 6px; }
+.when.late { color: var(--wait); font-weight: 600; }
+.unread { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--new); margin-right: 8px; vertical-align: middle; }
+.card.is-unread { border-color: color-mix(in srgb, var(--new) 45%, var(--line)); }
+.summary { margin-top: 10px; font-size: 13.5px; line-height: 1.45; display: flex; gap: 8px; }
+.summary::before { content: "✦"; color: var(--faint); flex: none; }
+.gitt { font: 11.5px ui-monospace, "SF Mono", Menlo, monospace; color: var(--muted); margin-left: 8px; white-space: nowrap; }
+.gitt.up { color: var(--wait); }
+.peer { margin-top: 10px; font-size: 12.5px; color: var(--muted); display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+.peer .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link { background: none; border: 0; padding: 0; font: inherit; color: var(--text); text-decoration: underline; text-decoration-color: var(--line-strong);
+  text-underline-offset: 2px; cursor: pointer; }
+.link:hover { text-decoration-color: currentColor; }
+.h2-act { margin-left: 4px; text-transform: none; letter-spacing: 0; padding: 1px 8px; font-size: 12px; }
+.msg.peer { align-self: stretch; border: 1px solid color-mix(in srgb, var(--ask) 35%, var(--line)); border-radius: 12px; padding: 10px 14px;
+  background: color-mix(in srgb, var(--ask-soft) 45%, transparent); }
+.msg.peer .psum { font-weight: 600; font-size: 13.5px; margin-bottom: 4px; }
+.msg.peer details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+.msg.peer .md { font-size: 13px; margin-top: 6px; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .pill.run i, .activity i { animation: none; } .card { transition: none; } }
+.tag { font-size: 11.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; }
+.when { margin-left: auto; color: var(--faint); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.name { font-size: 17px; font-weight: 620; letter-spacing: -.01em; margin: 10px 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.where { font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.where .branch { color: var(--text); }
+.activity { margin-top: 12px; display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 7px 10px; border-radius: 9px;
+  background: var(--run-soft); min-width: 0; }
+.activity i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--run); animation: pulse 1.6s ease-in-out infinite; }
+.activity .tool { font-weight: 600; flex: none; }
+.activity .det { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.activity .since { flex: none; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.prompt { margin-top: 14px; display: flex; gap: 10px; font-size: 13px; }
+.prompt .who { flex: none; font-weight: 600; color: var(--faint); font-size: 12px; padding-top: 1px; }
+.prompt .txt { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--muted); }
+.out { margin-top: 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 13.5px; }
+.out.ask { border-color: color-mix(in srgb, var(--ask) 45%, var(--line)); }
+.out .md { max-height: 9.6em; overflow: hidden; position: relative; overflow-wrap: anywhere; }
+.out .md::after { content: ""; position: absolute; inset: auto 0 0 0; height: 2.4em; background: linear-gradient(transparent, var(--surface-2)); }
+.out.open .md { max-height: none; } .out.open .md::after { display: none; }
+.md p, .md ul, .md ol, .md pre { margin: 0 0 .6em; } .md > :last-child { margin-bottom: 0; }
+.md ul, .md ol { padding-left: 1.3em; }
+.md h4 { font-size: 13.5px; margin: .8em 0 .3em; } .md > h4:first-child { margin-top: 0; }
+.md code { font: 12px ui-monospace, "SF Mono", Menlo, monospace; background: var(--code); padding: 1px 5px; border-radius: 5px; }
+.md pre { background: var(--code); padding: 8px 10px; border-radius: 8px; overflow-x: auto; }
+.md pre code { background: none; padding: 0; }
+/* a wide table scrolls inside its own box instead of breaking words or pushing the page wider */
+.md .tbl { overflow-x: auto; margin: 0 0 .6em; }
+.md table { border-collapse: collapse; font-size: 12.5px; width: 100%; }
+.md th, .md td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: normal; }
+.md th { color: var(--muted); font-weight: 600; }
+.more { margin-top: 6px; background: none; border: 0; padding: 0; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+.more:hover { color: var(--text); }
+.empty-out { color: var(--faint); font-style: italic; }
+.agents { margin-top: 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
+.agent { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; font-size: 13px; color: var(--muted);
+  background: none; border: 0; font: inherit; font-size: 13px; text-align: left; cursor: pointer; width: 100%; }
+.agent:hover { background: var(--surface-2); }
+.agent.on { background: var(--run-soft); color: var(--text); }
+.agent .ic { flex: none; width: 14px; text-align: center; font-size: 11px; }
+.agent.on .ic { color: var(--run); }
+.agent .d { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent .t { font-weight: 600; }
+.agent.fold { position: sticky; top: 0; background: var(--surface); color: var(--text); }
+.agent.fold:hover { background: var(--surface-2); }
+.agent .a { flex: none; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.agent-out { margin: 2px 0 6px 32px; font-size: 12.5px; padding: 8px 10px; border-left: 2px solid var(--line-strong); color: var(--muted); overflow-wrap: anywhere; }
+.agent-out .md { max-height: 14em; overflow: auto; }
+.ctx { margin-top: 12px; display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.ctx .meter { flex: 0 0 72px; height: 4px; border-radius: 2px; background: var(--bar); overflow: hidden; }
+.ctx .meter span { display: block; height: 100%; background: var(--muted); border-radius: 2px; }
+.ctx.hot .meter span { background: var(--wait); } .ctx.hot { color: var(--wait); }
+.gh { flex: none; display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; border: 1px solid transparent;
+  background: none; color: var(--muted); font: inherit; font-size: 14px; cursor: pointer; opacity: 0; transition: opacity .15s; }
+.card:hover .gh, .card:focus-within .gh, .gh:focus-visible { opacity: 1; }
+.gh:hover { border-color: var(--line-strong); color: var(--text); background: var(--surface-2); }
+.scrim { position: fixed; inset: 0; background: rgba(10,10,9,.45); z-index: 10; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(780px, 100vw); z-index: 11; display: flex; flex-direction: column;
+  background: var(--bg); border-left: 1px solid var(--line-strong); box-shadow: -12px 0 40px rgba(0,0,0,.25); animation: slide .18s ease-out; }
+@keyframes slide { from { transform: translateX(24px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .drawer { animation: none; } }
+.dhead { padding: 20px 24px 16px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.dhead .bar1 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dhead .bar1 > * { white-space: nowrap; }
+.dhead .bar1 .sp { flex: 1; }
+.dhead .name { font-size: 20px; margin-top: 10px; white-space: normal; }
+.dhead .agents { max-height: 30vh; overflow: auto; }
+.dbody { flex: 1; overflow: auto; padding: 20px 24px 28px; display: flex; flex-direction: column; gap: 14px; }
+.dfoot { padding: 14px 24px 18px; border-top: 1px solid var(--line); background: var(--surface); }
+.dfoot .reply { margin-top: 0; }
+.dfoot .note { color: var(--faint); font-size: 13px; }
+.msg { max-width: 100%; min-width: 0; }
+.msg .meta { font-size: 11.5px; color: var(--faint); margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+.msg.user { align-self: flex-end; max-width: 85%; }
+.msg.user .meta { text-align: right; }
+.msg.user .bubble { background: var(--wait-soft); color: var(--text); border-radius: 14px 14px 4px 14px; padding: 10px 14px;
+  white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13.5px; }
+.msg.assistant .md { font-size: 14px; overflow-wrap: anywhere; }
+.msg.tools details { font: 12px/1.6 ui-monospace, "SF Mono", Menlo, monospace; color: var(--muted); }
+.msg.tools summary { cursor: pointer; list-style: none; padding: 4px 10px; border: 1px dashed var(--line-strong); border-radius: 8px;
+  display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msg.tools summary::-webkit-details-marker { display: none; }
+.msg.tools ul { margin: 6px 0 0; padding-left: 1.2em; }
+.msg.tools li { overflow-wrap: anywhere; }
+.loading { color: var(--faint); }
+.list { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+.row { display: grid; grid-template-columns: 14px minmax(0, 2fr) minmax(0, 2fr) minmax(0, 3fr) 80px; gap: 14px; align-items: center;
+  padding: 11px 18px; border-top: 1px solid var(--line); cursor: pointer; font-size: 13.5px; }
+.row:first-child { border-top: 0; } .row:hover { background: var(--surface-2); }
+.row .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent, var(--idle)); }
+.row .n { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .p, .row .o { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .p { font: 12px ui-monospace, "SF Mono", Menlo, monospace; }
+.row .w { color: var(--faint); font-size: 12.5px; text-align: right; font-variant-numeric: tabular-nums; }
+.reply { margin-top: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.reply textarea { flex: 1 1 200px; min-width: 0; font: inherit; font-size: 13.5px; color: var(--text); background: var(--surface-2);
+  border: 1px solid var(--line-strong); border-radius: 9px; padding: 7px 10px; outline: none;
+  resize: none; field-sizing: content; max-height: 40vh; }
+.reply textarea:focus { border-color: var(--focus); }
+.dialogbox { margin-top: 10px; padding: 8px 10px; border-left: 3px solid var(--wait); background: var(--wait-soft); border-radius: 6px; font-size: 13.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.dialogbox .dt { color: var(--wait); font-weight: 600; font-size: 12px; }
+.dialogbox .dq + .dq { margin-top: 6px; }
+.dialogbox .dq > :first-child, .dialogbox .dcmd { white-space: pre-line; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; overflow: hidden; }
+.card .dialogbox .plan { max-height: 12em; overflow: hidden; }
+.dopts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.dopt { padding: 2px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--bar); font: inherit; font-size: 12.5px; color: var(--text); cursor: pointer; }
+.dopt:hover { border-color: var(--wait); }
+.dopt.on { background: var(--wait); border-color: var(--wait); color: var(--surface); }
+.reply .dialog { flex: 1 1 100%; color: var(--muted); font-size: 13px; }
+.btn { font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 12px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--line-strong); background: var(--surface); color: var(--text); }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--wait); border-color: var(--wait); color: #fff; }
+.btn.ghost { border-color: transparent; background: none; color: var(--muted); }
+.confirm { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; padding: 10px 12px; border-radius: 10px;
+  background: var(--wait-soft); font-size: 13px; }
+.confirm span { flex: 1 1 260px; }
+.confirm code { white-space: nowrap; }
+select.chip { color: var(--text); }
+.toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 20px); opacity: 0; background: var(--text); color: var(--bg);
+  padding: 10px 16px; border-radius: 10px; font-size: 13.5px; transition: opacity .2s, transform .2s; pointer-events: none; z-index: 20; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast .link { color: inherit; font-weight: 600; margin-left: 12px; }
+.toast.show .link { pointer-events: auto; }
+.offline { color: var(--wait); }
+.none { color: var(--faint); padding: 8px 0; }
+@media (max-width: 760px) {
+  .wrap { padding: 20px 16px 48px; }
+  /* the counters shrink to a row of chips, so the first cards show on the first screen */
+  .kpis { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 24px; }
+  .kpi { display: flex; align-items: baseline; gap: 6px; padding: 5px 11px; border-radius: 999px; box-shadow: none; }
+  .kpi b { display: inline; font-size: 16px; } .kpi span { font-size: 12.5px; }
+  .row { grid-template-columns: 14px minmax(0, 1fr) 70px; } .row .p, .row .o { display: none; }
+  .sub .keys { display: none; }
+  .dhead { position: relative; padding: 16px 16px 12px; }
+  .dhead .bar1 { flex-wrap: wrap; padding-right: 40px; }
+  .dhead .bar1 .sp { flex-basis: 100%; height: 0; }
+  .dhead .close { position: absolute; top: 10px; right: 10px; }
+  .dbody { padding: 16px; } .dfoot { padding: 12px 16px 16px; }
+  .msg.user { max-width: 92%; }
+}
+/* iOS zooms into any text field under 16px when it gets focus; last, so it wins over the sizes above */
+@media (pointer: coarse) { .search, .reply textarea, select.chip { font-size: 16px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1 data-i18n="title">Claude Dashboard</h1>
+      <div class="sub"><span id="sub" data-i18n="loading"></span><span class="keys" id="keys"></span></div>
+    </div>
+    <div class="lang" id="lang" role="group" aria-label="Language / Langue"><button data-lang="en">EN</button><button data-lang="fr">FR</button></div>
+  </div>
+  <div class="bar">
+    <input class="search" id="search" type="search" autocomplete="off">
+    <label class="chip"><input type="checkbox" id="byProject"> <span data-i18n="byProject"></span></label>
+    <label class="chip"><input type="checkbox" id="showIdle"> <span data-i18n="showIdle"></span></label>
+    <select class="chip" id="newIn"><option value=""></option></select>
+    <button class="chip" id="alerts" data-i18n="alerts" hidden></button>
+  </div>
+  <div class="kpis" id="kpis"></div>
+  <div id="sections"></div>
+</div>
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" hidden></aside>
+<div class="toast" id="toast" role="status"></div>
+<script>
+const COLORS = { red: '#e5484d', orange: '#f76b15', yellow: '#e2a336', green: '#30a46c', cyan: '#00a2c7', blue: '#3e63dd',
+  purple: '#8e4ec6', pink: '#d6409f' }
+const STALE_MS = 24 * 3600 * 1000
+const $ = id => document.getElementById(id)
+for (const id of ['showIdle', 'byProject']) {
+  try { $(id).checked = localStorage.getItem(id) === '1' } catch {}
+  $(id).onchange = () => { try { localStorage.setItem(id, $(id).checked ? '1' : '0') } catch {}; draw() }
+}
+$('search').oninput = () => draw()
+// ---------- language: install.sh sets the default, the toggle keeps this browser's choice ----------
+// French counts 0 as singular, English as plural
+const plural = (n, word, many = word + 's') => (LANG === 'fr' ? n > 1 : n !== 1) ? many : word
+const STR = {
+  en: {
+    title: 'Claude Dashboard', loading: 'Loading…',
+    keys: ' · <kbd>j</kbd> <kbd>k</kbd> navigate · <kbd>↵</kbd> details · <kbd>o</kbd> terminal · <kbd>r</kbd> reply · <kbd>/</kbd> search',
+    searchPh: 'Search a session, a project, a branch, an answer…', byProject: 'By project', showIdle: 'Inactive',
+    newIn: '＋ New session…', newInLabel: 'New session in a folder', alerts: 'Enable alerts', drawerLabel: 'Session details',
+    justNow: 'just now', ago: (n, unit) => `${n} ${unit} ago`, day: 'd', lessThanMin: 'less than 1 min',
+    since: m => m < 1 ? 'for <1 min' : m < 60 ? `for ${m} min` : m < 1440 ? `for ${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `for ${Math.floor(m / 1440)} d`,
+    closedSession: 'a closed session', bgNoTerminal: 'Background session: no terminal to open', unreachable: 'Server unreachable',
+    sendCancelled: 'Send cancelled', undo: 'Undo (Esc)', sendingTo: name => `Sending to ${name}…`, reply: 'Reply',
+    replyPh: key => key ? `Your reply… (${key} sends)` : 'Your reply…', replyTo: name => `Reply to ${name}`, send: 'Send', cancel: 'Cancel',
+    viewDetail: name => `Show the details of ${name}`, theTerminal: 'the terminal',
+    openTitle: app => `Open in ${app} (o, or ⌘-click the card)`, openLabel: (name, app) => `Open ${name} in ${app}`, openIn: app => `Open in ${app} ↗`,
+    notifQuestion: 'Question', notifTurn: 'Your turn', showLess: 'Show less', showAll: 'Show all', noAnswer: 'No answer yet',
+    background: 'background', newAnswer: 'New answer since your last visit', you: 'You', youSent: 'You · sent',
+    sinceAnswer: 'Time since its last answer', waitingFor: d => `waiting for ${d}`,
+    changedTitle: 'Modified files not committed', changed: n => `● ${n} ${plural(n, 'change')}`,
+    unpushedTitle: 'Commits on no remote branch', unpushed: n => `↑ ${n} unpushed`, received: 'Received from', sentTo: 'Sent to',
+    agents: (n, active) => `${n} agents` + (active ? ` · ${active} active` : ''), agentTag: n => `${n} ${plural(n, 'agent')}`,
+    running: (tool, detail) => `Running: ${tool} · ${detail}`, ctxTitle: (n, model) => `${n} context tokens · ${model}`,
+    ctx: pct => `context ${pct}%`, generated: n => `${n} tokens generated`,
+    pillRun: 'Running', pillFrozen: 'Frozen', pillIdle: 'Inactive', pillTest: 'To test', pillAsk: 'Question', pillWait: 'Your turn', pillDone: 'Ended',
+    loadingThread: 'Loading the conversation…', noThread: 'No exchange yet.', viewMessage: 'Show the message',
+    toolCalls: (n, names) => `⚙ ${n} tool ${plural(n, 'call')} · ${names}`,
+    newHereTitle: app => `Opens a ${app} tab in this folder with claude --dangerously-skip-permissions`, newHere: '＋ New session here',
+    closeSession: 'Close the session', close: 'Close', ended: 'This session has ended.', bgNoReply: 'Background session: no terminal to reply in.',
+    dialogOpen: (what, app) => `A prompt is open in the terminal${what ? ` (${what})` : ''}: answer in ${app}.`,
+    dialogHint: 'Sending dismisses the prompt in the terminal: your text goes to Claude instead.',
+    dialogAsk: 'Question in the terminal', dialogPlan: 'Plan to approve', dialogPermission: 'Permission requested', dialogOther: 'Prompt open in the terminal',
+    closeBg: 'Stop this background session? The conversation stays resumable (', closeRunning: 'Claude is still working: the current turn will be interrupted. ',
+    closeTab: term => `Close the session and its${term ? ' ' + term : ''} tab? The conversation stays resumable (`, closing: 'Closing…', frozen: 'frozen',
+    kRun: 'running', kWait: 'waiting for you', kAsk: n => plural(n, 'question asked', 'questions asked'), kTest: 'to test', kAgents: n => plural(n, 'active agent', 'active agents'),
+    newInTitle: cwd => `New session in ${cwd} (claude --dangerously-skip-permissions)`, plusSession: '＋ session',
+    secRun: 'Running', secWait: 'Waiting for you', fresh: n => ` · ${n} new`, secStale: 'Inactive or frozen', nothing: 'Nothing here.',
+    noMatch: q => `No session matches “${q}”.`, updated: time => `${time} · updating live`, offline: 'Server unreachable, retrying…',
+  },
+  fr: {
+    title: 'Claude Dashboard', loading: 'Chargement…',
+    keys: ' · <kbd>j</kbd> <kbd>k</kbd> naviguer · <kbd>↵</kbd> détail · <kbd>o</kbd> terminal · <kbd>r</kbd> répondre · <kbd>/</kbd> chercher',
+    searchPh: 'Chercher une session, un projet, une branche, une réponse…', byProject: 'Par projet', showIdle: 'Inactives',
+    newIn: '＋ Nouvelle session…', newInLabel: 'Nouvelle session dans un dossier', alerts: 'Activer les alertes', drawerLabel: 'Détail de la session',
+    justNow: 'à l’instant', ago: (n, unit) => `il y a ${n} ${unit}`, day: 'j', lessThanMin: 'moins d’1 min',
+    since: m => m < 1 ? 'depuis <1 min' : m < 60 ? `depuis ${m} min` : m < 1440 ? `depuis ${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `depuis ${Math.floor(m / 1440)} j`,
+    closedSession: 'une session fermée', bgNoTerminal: 'Session en arrière-plan : pas de terminal à ouvrir', unreachable: 'Serveur injoignable',
+    sendCancelled: 'Envoi annulé', undo: 'Annuler (Échap)', sendingTo: name => `Envoi à ${name}…`, reply: 'Répondre',
+    replyPh: key => key ? `Ta réponse… (${key} envoie)` : 'Ta réponse…', replyTo: name => `Répondre à ${name}`, send: 'Envoyer', cancel: 'Annuler',
+    viewDetail: name => `Voir le détail de ${name}`, theTerminal: 'le terminal',
+    openTitle: app => `Ouvrir dans ${app} (o, ou ⌘-clic sur la carte)`, openLabel: (name, app) => `Ouvrir ${name} dans ${app}`, openIn: app => `Ouvrir dans ${app} ↗`,
+    notifQuestion: 'Question', notifTurn: 'À toi', showLess: 'Réduire', showAll: 'Afficher tout', noAnswer: 'Pas encore de réponse',
+    background: 'arrière-plan', newAnswer: 'Nouvelle réponse depuis ta dernière visite', you: 'Toi', youSent: 'Toi · envoyé',
+    sinceAnswer: 'Temps depuis sa dernière réponse', waitingFor: d => `attend depuis ${d}`,
+    changedTitle: 'Fichiers modifiés non commités', changed: n => `● ${n} ${plural(n, 'modif')}`,
+    unpushedTitle: 'Commits présents sur aucune branche distante', unpushed: n => `↑ ${n} ${plural(n, 'non poussé', 'non poussés')}`, received: 'Reçu de', sentTo: 'Envoyé à',
+    agents: (n, active) => `${n} agents` + (active ? ` · ${active} ${plural(active, 'actif')}` : ''), agentTag: n => `${n} ${plural(n, 'agent')}`,
+    running: (tool, detail) => `En cours : ${tool} · ${detail}`, ctxTitle: (n, model) => `${n} tokens de contexte · ${model}`,
+    ctx: pct => `contexte ${pct} %`, generated: n => `${n} tokens générés`,
+    pillRun: 'En cours', pillFrozen: 'Figée', pillIdle: 'Inactive', pillTest: 'À tester', pillAsk: 'Question', pillWait: 'À toi', pillDone: 'Terminée',
+    loadingThread: 'Chargement de la conversation…', noThread: 'Aucun échange pour l’instant.', viewMessage: 'Voir le message',
+    toolCalls: (n, names) => `⚙ ${n} ${plural(n, 'appel')} d’outils · ${names}`,
+    newHereTitle: app => `Ouvre un onglet ${app} dans ce dossier avec claude --dangerously-skip-permissions`, newHere: '＋ Nouvelle session ici',
+    closeSession: 'Fermer la session', close: 'Fermer', ended: 'Cette session est terminée.', bgNoReply: 'Session en arrière-plan : pas de terminal où répondre.',
+    dialogOpen: (what, app) => `Une validation est ouverte dans le terminal${what ? ` (${what})` : ''} : réponds dans ${app}.`,
+    dialogHint: "L'envoi ferme la validation dans le terminal : ton texte part à Claude à la place.",
+    dialogAsk: 'Question dans le terminal', dialogPlan: 'Plan à valider', dialogPermission: 'Permission demandée', dialogOther: 'Validation ouverte dans le terminal',
+    closeBg: 'Arrêter cette session en arrière-plan ? La conversation reste reprenable (', closeRunning: 'Claude travaille encore : le tour en cours sera interrompu. ',
+    closeTab: term => `Fermer la session et son onglet${term ? ' ' + term : ''} ? La conversation reste reprenable (`, closing: 'Fermeture…', frozen: 'figée',
+    kRun: 'en cours', kWait: 'attendent ta réponse', kAsk: n => plural(n, 'question posée', 'questions posées'), kTest: 'à tester', kAgents: n => plural(n, 'agent actif', 'agents actifs'),
+    newInTitle: cwd => `Nouvelle session dans ${cwd} (claude --dangerously-skip-permissions)`, plusSession: '＋ session',
+    secRun: 'En cours', secWait: 'Attendent ta réponse', fresh: n => ` · ${n} ${plural(n, 'nouvelle')}`, secStale: 'Inactives ou figées', nothing: 'Rien ici.',
+    noMatch: q => `Aucune session ne correspond à « ${q} ».`, updated: time => `${time} · actualisé en continu`, offline: 'Serveur injoignable, nouvel essai…',
+  },
+}
+let LANG = '__LANG__'
+try { LANG = localStorage.getItem('lang') || LANG } catch {}
+if (!STR[LANG]) LANG = 'en'
+const t = (key, ...args) => { const v = STR[LANG][key]; return typeof v === 'function' ? v(...args) : v }
+const locale = () => LANG === 'fr' ? 'fr-FR' : 'en-US'
+function applyLang() {
+  document.documentElement.lang = LANG
+  document.title = t('title')
+  for (const n of document.querySelectorAll('[data-i18n]')) n.textContent = t(n.dataset.i18n)
+  $('keys').innerHTML = t('keys')
+  $('search').placeholder = t('searchPh')
+  $('newIn').options[0].textContent = t('newIn')
+  $('newIn').setAttribute('aria-label', t('newInLabel'))
+  $('drawer').setAttribute('aria-label', t('drawerLabel'))
+  for (const b of $('lang').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.lang === LANG))
+}
+applyLang()
+$('lang').onclick = e => {
+  const lang = e.target.closest('button')?.dataset.lang
+  if (!lang || lang === LANG) return
+  LANG = lang
+  try { localStorage.setItem('lang', LANG) } catch {}
+  applyLang(); badge(badgeCount); draw()
+}
+const TOKEN = '__TOKEN__'
+const PAGE = '__PAGE__'  // page.html's version when this page was served
+// the token changes when the server restarts (reboot): a 403 means this page is stale, reload it
+const post = async (path, body) => {
+  const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Board-Token': TOKEN, 'X-Board-Lang': LANG }, body: JSON.stringify(body) })
+  if (r.status === 403) { location.reload(); throw new Error('stale token') }
+  return r
+}
+const expanded = new Set(), openAgents = new Set(), replies = new Map()
+const picks = new Map()  // pid -> the choices clicked in an open question: { at (the dialog), sel: one Set of labels per question }
+let data = null, lastJson = '', previous = null
+
+// ---------- formatting ----------
+const ago = ts => {
+  if (!ts) return ''
+  const s = Math.max(0, Math.round((Date.now() - ts) / 1000))
+  if (s < 60) return t('justNow')
+  if (s < 3600) return t('ago', Math.round(s / 60), 'min')
+  if (s < 86400) return t('ago', Math.round(s / 3600), 'h')
+  return t('ago', Math.round(s / 86400), t('day'))
+}
+const short = ts => {
+  const s = Math.max(0, Math.round((Date.now() - ts) / 1000))
+  return s < 60 ? s + 's' : s < 3600 ? Math.round(s / 60) + 'm' : s < 86400 ? Math.round(s / 3600) + 'h' : Math.round(s / 86400) + t('day')
+}
+const since = ts => {
+  return t('since', Math.floor(Math.max(0, Date.now() - ts) / 60000))
+}
+// mcp__claude-in-chrome__tabs_context_mcp -> tabs_context_mcp
+const toolName = name => (name || '').startsWith('mcp__') ? name.split('__').slice(2).join('__') || name : name
+const tokens = n => n >= 1e6 ? (n / 1e6).toLocaleString(locale(), { maximumFractionDigits: 1 }) + ' M' : n >= 1e3 ? Math.round(n / 1e3) + ' k' : String(n)
+const h = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag)
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue
+    if (k.startsWith('on')) n[k] = v
+    else if (k === 'style') for (const [p, val] of Object.entries(v)) { if (val != null) n.style.setProperty(p, val) }
+    else n.setAttribute(k, v)
+  }
+  n.append(...kids.flat().filter(k => k != null && k !== false))
+  return n
+}
+const esc = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+// Minimal markdown: text is escaped first, so the regexes only ever add our own tags
+function md(src) {
+  const inline = t => t.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+  return esc(src).split(/```[^\n]*\n?/).map((part, i) => {
+    if (i % 2) return `<pre><code>${part}</code></pre>`
+    // a heading or a table often sits right against other lines: each one gets its own block
+    const blocks = []
+    for (const l of part.split('\n')) {
+      const kind = /^#{1,6} /.test(l) ? 'h' : /^\s*\|/.test(l) ? 't' : 'p'
+      if (kind !== 'h' && blocks.length && blocks[blocks.length - 1].kind === kind && l.trim()) blocks[blocks.length - 1].text += '\n' + l
+      else blocks.push({ kind, text: l })
+    }
+    return blocks.map(({ kind, text }) => text.split(/\n{2,}/).map(p => {
+      p = p.trim()
+      if (!p) return ''
+      if (kind === 'h') return `<h4>${inline(p.replace(/^#{1,6} /, ''))}</h4>`
+      const lines = p.split('\n')
+      if (kind === 't' && lines.length > 1) {
+        const cells = l => l.trim().replace(/^\||\|$/g, '').split('|').map(c => inline(c.trim()))
+        const body = lines.filter(l => !/^\s*\|[\s:|-]+\|?\s*$/.test(l)).map(cells)
+        return `<div class="tbl"><table>${body.map((r, i) => `<tr>${r.map(c => i ? `<td>${c}</td>` : `<th>${c}</th>`).join('')}</tr>`).join('')}</table></div>`
+      }
+      if (lines.every(l => /^\s*([-*]|\d+\.) /.test(l))) {
+        const start = lines[0].match(/^\s*(\d+)\./)?.[1]
+        const tag = start ? 'ol' : 'ul'
+        return `<${tag}${start && start !== '1' ? ` start="${start}"` : ''}>${lines.map(l => `<li>${inline(l.replace(/^\s*([-*]|\d+\.) /, ''))}</li>`).join('')}</${tag}>`
+      }
+      return `<p>${inline(p).replace(/\n/g, '<br>')}</p>`
+    }).join('')).join('')
+  }).join('')
+}
+const plain = s => (s || '').replace(/[*`#|>]+|-{3,}/g, ' ').replace(/\s+/g, ' ').trim()
+
+// ---------- session model ----------
+const seen = s => (s.lastOutputAt && Date.parse(s.lastOutputAt)) || s.startedAt
+const lastAct = s => (s.lastActivityAt && Date.parse(s.lastActivityAt)) || seen(s)
+// ponytail: "frozen" = marked busy but no message for an hour and no agent at work; a 1 h build reads as frozen too
+const FROZEN_MS = 3600 * 1000
+const bucket = s => {
+  const working = s.agents.some(a => a.isActive)
+  if (s.status === 'busy' || s.status === 'shell') return !working && Date.now() - lastAct(s) > FROZEN_MS ? 'frozen' : 'run'
+  return !working && Date.now() - seen(s) > STALE_MS ? 'stale' : 'wait'
+}
+// frozen sessions are listed with the inactive ones
+const group = s => bucket(s) === 'frozen' ? 'stale' : bucket(s)
+// ponytail: "to test" = the answer asks for a check on a device or a "ça fonctionne" / "let me know if it works", French or English
+// whatever the page language (it follows the session's language); a heuristic like isQuestion
+function isTest(s) {
+  const tail = (s.lastOutput || '').split('\n').slice(-15).join(' ')
+  return /à tester|tester (sur|de ton côté|toi-même)|install[ée]+e? sur ton (iphone|ipad|mac|téléphone|appareil|android)|prête? à (être )?test|dis-moi si (ça|cela|tout) (fonctionne|marche)|attend (ton|tes) tests?|ton « ?ça fonctionne|ready (for|to) (be )?test|test (it |this |them )?on (your|a real|the) (device|iphone|ipad|mac|phone|android)|installed on your (iphone|ipad|mac|phone|device|android)|let me know if (it|this|that|everything) works|waiting for your tests?/i.test(tail)
+}
+// ---------- unread ----------
+let lastSeen = {}
+try { lastSeen = JSON.parse(localStorage.getItem('lastSeen') || '{}') } catch {}
+const saveSeen = () => { try { localStorage.setItem('lastSeen', JSON.stringify(lastSeen)) } catch {} }
+const markRead = s => { if (s?.sessionId && lastSeen[s.sessionId] !== seen(s)) { lastSeen[s.sessionId] = seen(s); saveSeen() } }
+const isUnread = s => group(s) === 'wait' && lastSeen[s.sessionId] != null && seen(s) > lastSeen[s.sessionId]
+function primeSeen(sessions) {
+  // a session met for the first time counts as read: only answers that arrive afterwards are new
+  let changed = false
+  for (const s of sessions) if (lastSeen[s.sessionId] == null) { lastSeen[s.sessionId] = seen(s); changed = true }
+  if (changed) saveSeen()
+}
+const duration = ts => {
+  const m = Math.max(0, Math.round((Date.now() - ts) / 60000))
+  return m < 1 ? t('lessThanMin') : m < 60 ? `${m} min` : m < 1440 ? `${Math.round(m / 60)} h` : `${Math.round(m / 1440)} ${t('day')}`
+}
+const peerSession = p => p && data?.sessions.find(x => (p.pid && x.pid === p.pid) || x.name === p.name)
+const peerLabel = name => String(name || '').startsWith('uds:') ? t('closedSession') : name
+// ponytail: "question" = the answer ends on a "?" or offers numbered/lettered options; a heuristic, not the model's intent
+function isQuestion(s) {
+  const tail = (s.lastOutput || '').trim().split('\n').slice(-12)
+  if (/\?\s*\**\s*$/.test(tail.at(-1) || '')) return true
+  return tail.filter(l => /^\s*(\d+|[A-D])[.)] /.test(l)).length >= 2 && /\?|réponds|choisis|dis-moi|valides?|reply|choose|pick|let me know|confirm/i.test(tail.join(' '))
+}
+const project = s => s.cwd.split('/').filter(Boolean).pop() || s.cwd
+const accent = s => COLORS[s.color] || null
+const CONTEXT_WINDOW = 1_000_000  // ponytail: every session here runs a 1M window (compactions seen up to 968k); read it per model if that changes
+const matches = (s, q) => !q || [s.name, project(s), s.branch, s.lastPrompt, s.lastOutput, ...s.agents.map(a => a.description)]
+  .some(v => v && v.toLowerCase().includes(q))
+
+// ---------- actions ----------
+async function focusSession(s) {
+  if (s.kind === 'bg') return toast(t('bgNoTerminal'))
+  markRead(s)
+  try {
+    toast((await (await post('/api/focus', { pid: s.pid })).json()).message)
+  } catch { toast(t('unreachable')) }
+}
+let toastTimer
+function toast(text, action) {
+  const t = $('toast'); t.replaceChildren(text, action ? h('button', { class: 'link', onclick: action.run }, action.label) : ''); t.classList.add('show')
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2200)
+}
+// ---------- reply (types into the session's terminal and presses Enter, no confirmation step) ----------
+// a reply sent while Claude works waits in its input queue, as if typed in the terminal;
+// with a dialog open (status "waiting") the server presses Escape first, as "no / cancel"; only for the dialogs
+// that Escape is known to close (same list as DISMISSABLE in server.py): with any other, Enter would answer it
+const DISMISSABLE = ['permission prompt', 'input needed']
+const canReply = s => s.kind !== 'bg' && (s.status !== 'waiting' || DISMISSABLE.includes(s.waitingFor))
+function openReply(s) {
+  if (!canReply(s)) return
+  if (!replies.has(s.pid)) replies.set(s.pid, { text: '' })
+  draw(); focusReply(s.pid)
+}
+function focusReply(pid) {
+  const input = (detailPid === pid && document.querySelector('#drawer .reply textarea')) || document.querySelector(`#sections .reply[data-reply="${pid}"] textarea`)
+  if (input) { input.focus({ preventScroll: true }); input.setSelectionRange(input.value.length, input.value.length) }
+}
+// a sent reply shows at once; it gives way when the session's last prompt changes, i.e. the transcript has it
+// ponytail: resending the very same text keeps the "sent" tag until the next prompt
+const sent = new Map()  // pid -> { text, before }
+function pendingText(s) {
+  const p = sent.get(s.pid)
+  if (p && s.lastPrompt === p.before) return p.text
+  sent.delete(s.pid)
+}
+let lastReplyKey = 0  // a redraw replaces the reply field: polls hold off while a reply is being typed
+const sending = new Set()  // a pid with a send in flight: a second Enter or click is ignored, never sent twice
+// resolves true once the delay has passed, false if "Annuler" was clicked first
+// ponytail: one toast; a second send within the delay replaces it, so the first one can no longer be cancelled
+let cancelSend = null  // the pending send's cancel, for Escape
+const undoable = (text, ms) => new Promise(done => {
+  let settled = false
+  const run = () => { if (settled) return; settled = true; cancelSend = null; clearTimeout(timer); toast(t('sendCancelled')); done(false) }
+  const timer = setTimeout(() => { settled = true; if (cancelSend === run) cancelSend = null; $('toast').querySelector('.link')?.remove(); done(true) }, ms)
+  cancelSend = run
+  toast(text, { label: t('undo'), run })
+})
+// capture phase: Escape cancels a pending send before any field or drawer sees it
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && cancelSend) { e.preventDefault(); e.stopPropagation(); cancelSend() } }, true)
+const UNDO_MS = 2000
+async function sendReply(s, text) {
+  if (!text.trim() || sending.has(s.pid)) return
+  sending.add(s.pid)
+  // the field empties at once; a cancel or a failure puts the text back
+  replies.delete(s.pid); draw()
+  let ok = false
+  try {
+    if (await undoable(t('sendingTo', s.name), UNDO_MS)) {
+      const r = await post('/api/reply', { pid: s.pid, text })
+      toast((await r.json()).message)
+      ok = r.ok
+      // the server sends the text with each line's whitespace collapsed; "before" comes from the latest poll, not from the render
+      if (ok) { markRead(s); sent.set(s.pid, { text: text.split('\n').map(l => l.split(/\s+/).join(' ').trim()).join('\n').trim(), before: data.sessions.find(x => x.pid === s.pid)?.lastPrompt }) }
+    }
+  } catch { toast(t('unreachable')) }
+  finally { sending.delete(s.pid) }
+  if (!ok && !replies.get(s.pid)?.text.trim()) replies.set(s.pid, { text })  // never over a new draft
+  draw(); if (replies.has(s.pid)) focusReply(s.pid)
+  if (detailPid === s.pid) loadHistory()
+}
+// a send shortcut only where there is a hardware keyboard; ⌘ on Apple, Ctrl elsewhere
+const SEND_KEY = matchMedia('(pointer: coarse)').matches ? '' : /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘↵' : 'Ctrl+↵'
+function replyBox(s) {
+  const state = replies.get(s.pid)
+  const stop = e => e.stopPropagation()
+  if (!state) return h('div', { class: 'reply', onclick: stop },
+    h('button', { class: 'btn', onclick: () => openReply(s) }, t('reply')))
+  const cancel = () => {
+    // in the drawer the field stays; Escape just leaves it so a second Escape closes the drawer
+    if (detailPid === s.pid) return document.activeElement?.blur()
+    replies.delete(s.pid); draw()
+  }
+  return h('div', { class: 'reply', 'data-reply': s.pid, onclick: stop },
+    s.status === 'waiting' && h('div', { class: 'note dialog' }, t('dialogHint')),
+    h('textarea', { rows: 1, maxlength: 2000,
+      placeholder: t('replyPh', SEND_KEY), 'aria-label': t('replyTo', s.name),
+      oninput: e => { state.text = e.target.value; lastReplyKey = Date.now() },
+      // Enter adds a new line: the "Envoyer" button or ⌘/Ctrl+Enter sends
+      onkeydown: e => { e.stopPropagation(); if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.isComposing) { e.preventDefault(); sendReply(s, state.text) } else if (e.key === 'Escape') { e.preventDefault(); cancel() } } }, state.text),
+    h('button', { class: 'btn primary', onclick: () => sendReply(s, state.text) }, t('send')),
+    detailPid !== s.pid && h('button', { class: 'btn ghost', onclick: cancel }, t('cancel')))
+}
+
+const activate = s => ({ tabindex: 0, role: 'button', 'data-nav': '', 'data-pid': s.pid, 'aria-label': t('viewDetail', s.name),
+  onclick: e => (e.metaKey || e.ctrlKey ? focusSession(s) : openDetail(s.pid)),
+  onkeydown: e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDetail(s.pid) } } })
+// the terminal app a session runs in, as the server names it
+const term = s => s.terminal || t('theTerminal')
+const openButton = s => s.kind !== 'bg' && h('button', { class: 'gh', title: t('openTitle', term(s)),
+  'aria-label': t('openLabel', s.name, term(s)), onclick: e => { e.stopPropagation(); focusSession(s) } }, '↗')
+
+// ---------- alerts ----------
+const canNotify = 'Notification' in window
+function refreshAlertButton() { $('alerts').hidden = !canNotify || Notification.permission !== 'default' }
+$('alerts').onclick = async () => { await Notification.requestPermission(); refreshAlertButton() }
+refreshAlertButton()
+function notifyTransitions(sessions) {
+  const now = new Map(sessions.map(s => [s.pid, bucket(s)]))
+  if (previous && canNotify && Notification.permission === 'granted') {
+    for (const s of sessions) {
+      if (previous.get(s.pid) !== 'run' || now.get(s.pid) !== 'wait') continue
+      const n = new Notification(`${isQuestion(s) ? t('notifQuestion') : t('notifTurn')} · ${s.name}`,
+        { body: plain(s.lastOutput).slice(0, 160), tag: 'session-' + s.pid, icon: '/icon.svg' })
+      n.onclick = () => { n.close(); window.focus(); openDetail(s.pid) }
+    }
+  }
+  previous = now
+}
+let logo = '', badgeCount = 0  // assets/logo.svg as served, the count is drawn on top of it
+fetch('/icon.svg').then(r => r.ok ? r.text() : '').then(text => { logo = text; badge(badgeCount) }).catch(() => {})
+function badge(count) {
+  badgeCount = count
+  document.title = count ? `(${count}) ${t('title')}` : t('title')
+  const dot = count ? `<circle cx="48" cy="16" r="15" fill="#e5484d"/><text x="48" y="22" font-size="18" font-family="-apple-system,sans-serif" font-weight="700" text-anchor="middle" fill="#fff">${count > 9 ? '9+' : count}</text>` : ''
+  if (logo) $('favicon').href = 'data:image/svg+xml,' + encodeURIComponent(logo.replace('</svg>', dot + '</svg>'))
+}
+
+// ---------- rendering ----------
+function card(s) {
+  const pill = pillOf(s), ask = pill[0] === 'ask'
+  const active = s.agents.filter(a => a.isActive).length
+  const isOpen = expanded.has(s.pid)
+  const out = s.lastOutput
+    ? h('div', { class: 'out' + (isOpen ? ' open' : '') + (ask ? ' ask' : '') },
+        Object.assign(h('div', { class: 'md' }), { innerHTML: md(s.lastOutput) }),
+        s.lastOutput.length > 280 && h('button', { class: 'more', onclick: e => {
+          e.stopPropagation(); isOpen ? expanded.delete(s.pid) : expanded.add(s.pid); draw()
+        } }, isOpen ? t('showLess') : t('showAll')))
+    : h('div', { class: 'out' }, h('div', { class: 'empty-out' }, t('noAnswer')))
+  const unread = isUnread(s), pending = pendingText(s), prompt = pending || s.lastPrompt
+  return h('article', { class: 'card' + (s.kind === 'bg' ? ' nofocus' : '') + (unread ? ' is-unread' : ''), style: { '--accent': accent(s) }, ...activate(s) },
+    h('div', { class: 'head' },
+      h('span', { class: 'pill ' + pill[0] }, h('i'), pill[1]),
+      s.kind === 'bg' && h('span', { class: 'tag' }, t('background')),
+      active > 0 && h('span', { class: 'tag' }, t('agentTag', active)),
+      whenTag(s), openButton(s)),
+    h('div', { class: 'name', title: s.name }, unread && h('i', { class: 'unread', title: t('newAnswer') }), s.name),
+    whereLine(s, project(s)),
+    group(s) !== 'run' && s.summary && h('div', { class: 'summary' }, s.summary),
+    peerLine(s),
+    activityLine(s),
+    prompt && h('div', { class: 'prompt' }, h('span', { class: 'who' }, pending ? t('youSent') : t('you')), h('span', { class: 'txt' }, prompt)),
+    out,
+    dialogBox(s),
+    agentList(s),
+    canReply(s) && replyBox(s),
+    contextMeter(s))
+}
+
+function whenTag(s) {
+  if (group(s) !== 'wait') return h('span', { class: 'when', 'data-ago': seen(s) }, ago(seen(s)))
+  const late = Date.now() - seen(s) > 3600 * 1000
+  return h('span', { class: 'when' + (late ? ' late' : ''), 'data-wait': seen(s), title: t('sinceAnswer') }, t('waitingFor', duration(seen(s))))
+}
+function whereLine(s, place) {
+  const g = s.git
+  return h('div', { class: 'where', title: s.cwd }, place, s.branch && ' · ', s.branch && h('span', { class: 'branch' }, s.branch),
+    g?.changed > 0 && h('span', { class: 'gitt', title: t('changedTitle') }, t('changed', g.changed)),
+    g?.unpushed > 0 && h('span', { class: 'gitt up', title: t('unpushedTitle') }, t('unpushed', g.unpushed)))
+}
+function peerLine(s) {
+  const p = s.lastPeer
+  if (!p || Date.now() - Date.parse(p.at) > 24 * 3600 * 1000) return null
+  const other = peerSession(p)
+  const name = other ? h('button', { class: 'link who', onclick: e => { e.stopPropagation(); openDetail(other.pid) } }, other.name)
+    : h('span', { class: 'who' }, peerLabel(p.name))
+  return h('div', { class: 'peer', title: p.summary || '' }, '✉', p.dir === 'in' ? t('received') : t('sentTo'), name,
+    h('span', { 'data-ago': Date.parse(p.at) }, ago(Date.parse(p.at))))
+}
+
+// the drawer folds a long agent list into one line, so the conversation keeps the room
+let agentsOpen = false
+function agentList(s, foldable) {
+  if (!s.agents.length) return null
+  const folded = foldable && s.agents.length > 3, active = s.agents.filter(a => a.isActive).length
+  return h('div', { class: 'agents' }, folded && h('button', { class: 'agent fold', 'aria-expanded': String(agentsOpen),
+    onclick: () => { agentsOpen = !agentsOpen; renderDrawer() } },
+    h('span', { class: 'ic' }, agentsOpen ? '▾' : '▸'),
+    h('span', { class: 'd' }, t('agents', s.agents.length, active))),
+  (!folded || agentsOpen) && s.agents.flatMap(a => {
+    const key = s.pid + '/' + a.id, open = openAgents.has(key)
+    return [
+      h('button', { class: 'agent' + (a.isActive ? ' on' : ''), 'aria-expanded': String(open), onclick: e => {
+        e.stopPropagation(); open ? openAgents.delete(key) : openAgents.add(key); draw()
+      } },
+        h('span', { class: 'ic' }, a.isActive ? '●' : '✓'),
+        h('span', { class: 'd', title: a.description }, h('span', { class: 't' }, a.type), ' · ', a.description),
+        h('span', { class: 'a', 'data-short': a.updatedAt }, short(a.updatedAt))),
+      open && h('div', { class: 'agent-out', onclick: e => e.stopPropagation() },
+        a.lastOutput ? Object.assign(h('div', { class: 'md' }), { innerHTML: md(a.lastOutput) })
+          : a.lastTool ? t('running', toolName(a.lastTool.name), a.lastTool.detail) : t('noAnswer')),
+    ]
+  }))
+}
+
+function contextMeter(s) {
+  if (!s.contextTokens) return null
+  const pct = Math.min(100, Math.round(s.contextTokens / CONTEXT_WINDOW * 100))
+  return h('div', { class: 'ctx' + (pct >= 80 ? ' hot' : ''), title: t('ctxTitle', s.contextTokens.toLocaleString(locale()), s.model || '') },
+    h('span', { class: 'meter' }, h('span', { style: { width: pct + '%' } })),
+    t('ctx', pct), ' · ', t('generated', tokens(s.outputTokens || 0)))
+}
+
+const pillOf = s => {
+  const kind = bucket(s)
+  if (kind === 'run') return ['run', t('pillRun')]
+  if (kind === 'frozen') return ['frozen', t('pillFrozen')]
+  if (kind === 'stale') return ['idle', t('pillIdle')]
+  return isTest(s) ? ['test', t('pillTest')] : isQuestion(s) ? ['ask', t('pillAsk')] : ['wait', t('pillWait')]
+}
+// what the open dialog asks, stored by the server's PermissionRequest hook (board_dialog_hook.py) as it opened
+function dialogBox(s) {
+  if (s.status !== 'waiting') return null
+  const tool = s.dialog || {}
+  if (tool.questions?.length) {
+    const pick = picks.get(s.pid)?.at === tool.at ? picks.get(s.pid) : null
+    return h('div', { class: 'dialogbox' }, h('div', { class: 'dt' }, t('dialogAsk')),
+      ...tool.questions.map((q, i) => h('div', { class: 'dq' }, h('div', {}, q.question),
+        q.options.length > 0 && h('div', { class: 'dopts' }, ...q.options.map(o => h('button', {
+          class: 'dopt' + (pick?.sel[i].has(o) ? ' on' : ''), 'aria-pressed': String(!!pick?.sel[i].has(o)),
+          onclick: e => { e.stopPropagation(); pickOption(s, tool, i, o) } }, o))))))
+  }
+  if (tool.tool === 'ExitPlanMode') return h('div', { class: 'dialogbox' }, h('div', { class: 'dt' }, t('dialogPlan')),
+    Object.assign(h('div', { class: 'md plan' }), { innerHTML: md(tool.detail || '') }))
+  const [title, body] = tool.tool ? [t('dialogPermission'), [toolName(tool.tool), tool.detail].filter(Boolean).join(' · ')]
+    : [t('dialogOther'), s.waitingFor]
+  return h('div', { class: 'dialogbox' }, h('div', { class: 'dt' }, title), body && h('div', { class: 'dcmd' }, body))
+}
+// a choice is sent as the reply text (the server closes the dialog first); with one single-choice question
+// a click sends it, otherwise the clicks compose the reply, sent with the Send button
+function pickOption(s, tool, i, label) {
+  const qs = tool.questions
+  if (qs.length === 1 && !qs[0].multiSelect) return sendReply(s, label)
+  if (picks.get(s.pid)?.at !== tool.at) picks.set(s.pid, { at: tool.at, sel: qs.map(() => new Set()) })
+  const sel = picks.get(s.pid).sel[i]
+  if (sel.has(label)) sel.delete(label)
+  else { if (!qs[i].multiSelect) sel.clear(); sel.add(label) }
+  const text = qs.map((q, j) => picks.get(s.pid).sel[j].size ? `${q.question} ${[...picks.get(s.pid).sel[j]].join(', ')}` : '').filter(Boolean).join('\n')
+  replies.set(s.pid, { text }); draw(); focusReply(s.pid)
+}
+const activityLine = s => bucket(s) === 'run' && s.lastTool && h('div', { class: 'activity', title: `${s.lastTool.name} · ${s.lastTool.detail}` },
+  h('i'), h('span', { class: 'tool' }, toolName(s.lastTool.name)), h('span', { class: 'det' }, s.lastTool.detail),
+  s.turnStartedAt && h('span', { class: 'since', 'data-since': Date.parse(s.turnStartedAt) }, since(Date.parse(s.turnStartedAt))))
+
+// ---------- detail drawer ----------
+let detailPid = null, hist = null, histJson = '', lastDetailSession = null, confirmClose = null
+// the drawer is a history entry: the phone's back button or gesture closes it instead of leaving the board
+// a reload with the drawer open keeps that entry's state: drop it, the drawer starts closed
+if (history.state?.detail) history.replaceState(null, '')
+let closing = false  // a back is under way: a second close (double tap, Esc then ✕) must not step past the board
+function openDetail(pid) {
+  if (!history.state?.detail) history.pushState({ detail: true }, '')
+  detailPid = pid; hist = null; histJson = ''; confirmClose = null; agentsOpen = false
+  document.body.style.overflow = 'hidden'
+  renderDrawer(); loadHistory()
+  $('drawer').querySelector('.close')?.focus({ preventScroll: true })
+}
+function closeDetail() {
+  if (history.state?.detail) { if (!closing) { closing = true; history.back() } return }  // popstate comes back here
+  const pid = detailPid
+  if (replies.get(pid) && !replies.get(pid).text.trim()) replies.delete(pid)
+  detailPid = null; hist = null
+  $('drawer').hidden = $('scrim').hidden = true
+  document.body.style.overflow = ''
+  draw()
+  document.querySelector(`#sections [data-pid="${pid}"]`)?.focus({ preventScroll: true })
+}
+$('scrim').onclick = closeDetail
+window.onpopstate = () => { closing = false; if (detailPid != null) closeDetail() }
+async function loadHistory() {
+  const pid = detailPid
+  if (pid == null) return
+  try {
+    const r = await fetch(`/api/history?pid=${pid}`, { cache: 'no-store' })
+    if (!r.ok || pid !== detailPid) return
+    const text = await r.text()
+    if (text === histJson) return
+    const first = hist === null
+    histJson = text; hist = JSON.parse(text).items
+    if (!document.activeElement?.closest?.('#drawer .reply')) renderDrawer(first)
+    else renderThread(first)
+  } catch {}
+}
+function thread() {
+  const s = data?.sessions.find(x => x.pid === detailPid), pending = s && pendingText(s)
+  if (!hist) return [h('div', { class: 'loading' }, t('loadingThread'))]
+  if (!hist.length && !pending) return [h('div', { class: 'loading' }, t('noThread'))]
+  const stamp = at => at && new Date(at).toLocaleString(locale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  const items = hist.map(m => {
+    if (m.role === 'peer-in' || m.role === 'peer-out') {
+      const other = peerSession(m), label = '✉ ' + (m.role === 'peer-in' ? t('received') : t('sentTo')) + ' '
+      const body = Object.assign(h('div', { class: 'md' }), { innerHTML: md(m.text || '') })
+      return h('div', { class: 'msg peer' },
+        h('div', { class: 'meta' }, label, other ? h('button', { class: 'link', onclick: () => openDetail(other.pid) }, other.name) : peerLabel(m.name), ' · ', stamp(m.at)),
+        m.summary && h('div', { class: 'psum' }, m.summary),
+        (m.text || '').length > 500 ? h('details', {}, h('summary', {}, t('viewMessage')), body) : body)
+    }
+    if (m.role === 'user') return h('div', { class: 'msg user' }, h('div', { class: 'meta' }, t('you') + ' · ', stamp(m.at)), h('div', { class: 'bubble' }, m.text))
+    if (m.role === 'assistant') return h('div', { class: 'msg assistant' }, h('div', { class: 'meta' }, 'Claude · ', stamp(m.at)),
+      Object.assign(h('div', { class: 'md' }), { innerHTML: md(m.text) }))
+    const names = [...new Set(m.calls.map(c => toolName(c.name)))]
+    return h('div', { class: 'msg tools' }, h('details', {},
+      h('summary', {}, t('toolCalls', m.calls.length, names.slice(0, 5).join(', ') + (names.length > 5 ? '…' : ''))),
+      h('ul', {}, m.calls.map(c => h('li', {}, h('b', {}, toolName(c.name)), c.detail ? ' · ' + c.detail : '')))))
+  })
+  // the history can hold the sent prompt one poll before the session's last prompt does
+  if (pending && hist.findLast(m => m.role === 'user')?.text !== pending) items.push(h('div', { class: 'msg user' }, h('div', { class: 'meta' }, t('youSent')), h('div', { class: 'bubble' }, pending)))
+  return items
+}
+function renderThread(scrollToEnd) {
+  const body = $('drawer').querySelector('.dbody')
+  if (!body) return
+  const nearEnd = body.scrollHeight - body.scrollTop - body.clientHeight < 80
+  const top = body.scrollTop
+  body.replaceChildren(...thread())
+  body.scrollTop = scrollToEnd || nearEnd ? body.scrollHeight : top
+}
+function renderDrawer(scrollToEnd) {
+  const drawer = $('drawer')
+  if (detailPid == null) { drawer.hidden = $('scrim').hidden = true; return }
+  const s = data?.sessions.find(x => x.pid === detailPid) || lastDetailSession
+  if (!s) return
+  lastDetailSession = s
+  const gone = !data.sessions.some(x => x.pid === detailPid)
+  if (!gone) markRead(s)
+  const pill = gone ? ['idle', t('pillDone')] : pillOf(s)
+  if (canReply(s) && !gone && !replies.has(s.pid)) replies.set(s.pid, { text: '' })
+  const oldBody = drawer.querySelector('.dbody'), keep = oldBody && { top: oldBody.scrollTop, end: oldBody.scrollHeight - oldBody.scrollTop - oldBody.clientHeight < 80 }
+  drawer.replaceChildren(
+    h('div', { class: 'dhead' },
+      h('div', { class: 'bar1' },
+        h('span', { class: 'pill ' + pill[0] }, h('i'), pill[1]),
+        s.kind === 'bg' && h('span', { class: 'tag' }, t('background')),
+        whenTag(s),
+        h('span', { class: 'sp' }),
+        h('button', { class: 'btn ghost', title: t('newHereTitle', data.newTerminal), onclick: () => newSession(s.cwd) }, t('newHere')),
+        !gone && h('button', { class: 'btn ghost', onclick: () => { confirmClose = s.pid; renderDrawer() } }, t('closeSession')),
+        s.kind !== 'bg' && !gone && h('button', { class: 'btn', onclick: () => focusSession(s) }, t('openIn', term(s))),
+        h('button', { class: 'btn ghost close', 'aria-label': t('close'), onclick: closeDetail }, '✕')),
+      confirmClose === s.pid && !gone && h('div', { class: 'confirm' },
+        h('span', {}, closeWarning(s)),
+        h('button', { class: 'btn primary', onclick: () => closeSession(s) }, t('close')),
+        h('button', { class: 'btn ghost', onclick: () => { confirmClose = null; renderDrawer() } }, t('cancel'))),
+      h('div', { class: 'name' }, s.name),
+      whereLine(s, s.cwd),
+      s.summary && group(s) !== 'run' && h('div', { class: 'summary' }, s.summary),
+      peerLine(s), activityLine(s), dialogBox(s), agentList(s, true), contextMeter(s)),
+    h('div', { class: 'dbody' }),
+    h('div', { class: 'dfoot' },
+      gone ? h('div', { class: 'note' }, t('ended'))
+        : canReply(s) ? replyBox(s)
+        : h('div', { class: 'note' }, s.kind === 'bg' ? t('bgNoReply') : t('dialogOpen', s.waitingFor, term(s)))))
+  drawer.hidden = $('scrim').hidden = false
+  const body = drawer.querySelector('.dbody')
+  body.replaceChildren(...thread())
+  body.scrollTop = scrollToEnd || !keep || keep.end ? body.scrollHeight : keep.top
+  tick()
+}
+
+async function newSession(cwd) {
+  try { toast((await (await post('/api/new', { cwd })).json()).message) } catch { toast(t('unreachable')) }
+}
+$('newIn').onchange = e => { const cwd = e.target.value; e.target.value = ''; if (cwd) newSession(cwd) }
+// a letter or an arrow on the closed picker would change its value, and so start a session, without a choice in the list
+$('newIn').onkeydown = e => { if ((e.key.length === 1 && e.key !== ' ') || e.key.startsWith('Arrow')) e.preventDefault() }
+function drawFolders(folders = []) {
+  const select = $('newIn'), key = folders.join('\n')
+  if (select.dataset.key === key) return  // rebuilding the options would close an open picker
+  select.dataset.key = key
+  select.replaceChildren(select.options[0], ...folders.map(f => h('option', { value: f }, f.split('/').slice(-2).join('/'))))
+}
+
+const closeWarning = s => s.kind === 'bg'
+  ? [t('closeBg'), h('code', {}, 'claude attach'), ').']
+  : [group(s) === 'run' ? t('closeRunning') : '', t('closeTab', s.terminal), h('code', {}, 'claude --resume'), ').']
+async function closeSession(s) {
+  confirmClose = null; renderDrawer()
+  toast(t('closing'))
+  try {
+    const r = await post('/api/close', { pid: s.pid })
+    toast((await r.json()).message)
+    if (r.ok) { if (detailPid === s.pid) closeDetail(); poll() }
+  } catch { toast(t('unreachable')) }
+}
+
+function row(s) {
+  return h('div', { class: 'row', style: { '--accent': accent(s) }, ...activate(s) },
+    h('span', { class: 'dot' }),
+    h('span', { class: 'n', title: s.name }, bucket(s) === 'frozen' && h('span', { class: 'tag', style: { 'margin-right': '6px' } }, t('frozen')), s.name),
+    h('span', { class: 'p', title: s.cwd }, project(s) + (s.branch ? ' · ' + s.branch : '')),
+    h('span', { class: 'o' }, plain(s.lastOutput || s.lastPrompt).slice(0, 200)),
+    h('span', { class: 'w', 'data-ago': seen(s) }, ago(seen(s))))
+}
+
+const byRecent = (a, b) => seen(b) - seen(a)
+const sec = (title, count, body, extra) => h('section', {}, h('h2', {}, title, h('span', { class: 'count' }, count), extra), body)
+const cardsAndRows = list => {
+  const live = list.filter(s => group(s) !== 'stale'), stale = list.filter(s => group(s) === 'stale')
+  return [live.length > 0 && h('div', { class: 'grid' }, live.map(card)),
+    $('showIdle').checked && stale.length > 0 && h('div', { class: 'list', style: { 'margin-top': live.length ? '16px' : null } }, stale.map(row))]
+}
+
+function draw() {
+  if (!data) return
+  // a redraw replaces the nodes; keep keyboard focus on the same session
+  const focusedPid = document.activeElement?.closest?.('[data-pid]')?.dataset.pid
+  const replyPid = document.activeElement?.closest?.('.reply')?.dataset.reply
+  const q = $('search').value.trim().toLowerCase()
+  const all = data.sessions, shown = all.filter(s => matches(s, q))
+  const groups = { run: [], wait: [], stale: [] }
+  for (const s of shown) groups[group(s)].push(s)
+  for (const list of Object.values(groups)) list.sort(byRecent)  // the latest answer first; a long wait shows in red
+  const waiting = all.filter(s => group(s) === 'wait')
+  const tests = waiting.filter(isTest).length, questions = waiting.filter(s => !isTest(s) && isQuestion(s)).length
+  const unreadCount = waiting.filter(isUnread).length
+  const activeAgents = all.reduce((n, s) => n + s.agents.filter(a => a.isActive).length, 0)
+  $('kpis').replaceChildren(...[
+    ['run', all.filter(s => bucket(s) === 'run').length, t('kRun')],
+    ['wait', waiting.length, t('kWait')],
+    ['ask', questions, t('kAsk', questions)],
+    ['test', tests, t('kTest')],
+    ['', activeAgents, t('kAgents', activeAgents)],
+  ].map(([cls, n, label]) => h('div', { class: 'kpi ' + cls }, h('b', {}, n), h('span', {}, label))))
+  badge(waiting.length)
+
+  let sections
+  if ($('byProject').checked) {
+    const projects = new Map()
+    for (const s of shown) (projects.get(project(s)) || projects.set(project(s), []).get(project(s))).push(s)
+    sections = [...projects.entries()]
+      .map(([name, list]) => [name, list.sort(byRecent)])
+      .sort((a, b) => seen(b[1][0]) - seen(a[1][0]))
+      .filter(([, list]) => $('showIdle').checked || list.some(s => group(s) !== 'stale'))
+      .map(([name, list]) => sec(name, list.length, cardsAndRows(list),
+        h('button', { class: 'btn ghost h2-act', title: t('newInTitle', list[0].cwd), onclick: () => newSession(list[0].cwd) }, t('plusSession'))))
+  } else {
+    sections = [
+      sec(t('secRun'), groups.run.length, groups.run.length ? h('div', { class: 'grid' }, groups.run.map(card)) : h('div', { class: 'none' }, t('nothing'))),
+      sec(t('secWait'), groups.wait.length + (unreadCount ? t('fresh', unreadCount) : ''), groups.wait.length ? h('div', { class: 'grid' }, groups.wait.map(card)) : h('div', { class: 'none' }, t('nothing'))),
+      sec(t('secStale'), groups.stale.length, $('showIdle').checked && groups.stale.length > 0 && h('div', { class: 'list' }, groups.stale.map(row))),
+    ]
+  }
+  if (q && !shown.length) sections = [h('div', { class: 'none' }, t('noMatch', q))]
+  $('sections').replaceChildren(...sections)
+  if (detailPid != null) renderDrawer()
+  if (focusedPid && detailPid == null) document.querySelector(`[data-pid="${focusedPid}"]`)?.focus({ preventScroll: true })
+  if (replyPid) focusReply(+replyPid)
+  tick()
+}
+
+function tick() {
+  for (const n of document.querySelectorAll('[data-ago]')) n.textContent = ago(+n.dataset.ago)
+  for (const n of document.querySelectorAll('[data-short]')) n.textContent = short(+n.dataset.short)
+  for (const n of document.querySelectorAll('[data-since]')) n.textContent = since(+n.dataset.since)
+  for (const n of document.querySelectorAll('[data-wait]')) {
+    n.textContent = t('waitingFor', duration(+n.dataset.wait))
+    n.classList.toggle('late', Date.now() - n.dataset.wait > 3600 * 1000)
+  }
+  if (data) $('sub').textContent = t('updated', new Date().toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }))
+}
+
+// ---------- keyboard ----------
+document.addEventListener('keydown', e => {
+  const typing = e.target.matches?.('input, textarea')
+  if (e.key === 'Escape' && typing) { e.target.value = ''; e.target.blur(); draw(); return }
+  if (typing || e.metaKey || e.ctrlKey || e.altKey) return
+  if (detailPid != null) {
+    const s = data?.sessions.find(x => x.pid === detailPid)
+    if (e.key === 'Escape') { e.preventDefault(); closeDetail() }
+    else if (e.key === 'o' && s) { e.preventDefault(); focusSession(s) }
+    else if (e.key === 'r' && s && canReply(s)) { e.preventDefault(); focusReply(s.pid) }
+    return
+  }
+  if (e.key === 'o') {
+    const s = data?.sessions.find(x => x.pid === +document.activeElement?.dataset?.pid)
+    if (s) { e.preventDefault(); focusSession(s) }
+    return
+  }
+  if (e.key === '/') { e.preventDefault(); $('search').focus(); return }
+  if (e.key === 'r') {
+    const pid = +document.activeElement?.dataset?.pid, s = data?.sessions.find(x => x.pid === pid)
+    if (s && canReply(s)) { e.preventDefault(); openReply(s) }
+    return
+  }
+  const step = e.key === 'j' || e.key === 'ArrowDown' ? 1 : e.key === 'k' || e.key === 'ArrowUp' ? -1 : 0
+  if (!step) return
+  e.preventDefault()
+  const navs = [...document.querySelectorAll('[data-nav]')]
+  const next = navs[Math.max(0, Math.min(navs.length - 1, navs.indexOf(document.activeElement) + step))]
+  next?.focus(); next?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+})
+
+// ---------- polling ----------
+async function poll() {
+  try {
+    const json = await (await fetch('/api/sessions', { cache: 'no-store' })).json()
+    data = json
+    drawFolders(json.folders)
+    primeSeen(json.sessions)
+    notifyTransitions(json.sessions)
+    const key = JSON.stringify(json)
+    // ponytail: "typing" = window focused and a key in the reply field within 15 s; a pause longer than that gets a redraw
+    const typingReply = document.hasFocus() && document.activeElement?.closest?.('.reply') && Date.now() - lastReplyKey < 15000
+    // page.html changed on the server: reload, unless a reply is being written or sent (it would be lost)
+    if (json.page !== PAGE && !sending.size && ![...replies.values()].some(r => r.text.trim())) return location.reload()
+    if (key !== lastJson && !typingReply) { lastJson = key; draw() } else tick()
+    if (detailPid != null) loadHistory()
+  } catch {
+    $('sub').replaceChildren(h('span', { class: 'offline' }, t('offline')))
+  }
+}
+poll()
+setInterval(poll, 3000)
+</script>
+</body>
+</html>

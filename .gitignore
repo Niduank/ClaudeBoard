@@ -1,0 +1,9 @@
+# Runtime state, personal to this Mac: summaries of session content, the server log, the tailnet identity
+summaries.json
+server.log
+tailnet.json
+dialogs/
+summarizer/
+__pycache__/
+.claude/tasks/
+.DS_Store
