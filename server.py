@@ -629,11 +629,12 @@ def find_terminal(pid, send=False):
         if len(match) != 1:
             return None, (404, ("ghostty_missing", {}))
     elif len(match) > 1:
-        # same title twice: only a folder shared with exactly one of them tells which is ours
+        # same title twice: only a folder shared with exactly one of them tells which is ours (a focus types nothing: the first)
         here = [t for t in terminals if t[2] == session["cwd"]]
-        if len(here) != 1 or here[0] not in match:
+        if len(here) == 1 and here[0] in match:
+            match = here
+        elif send:
             return None, (409, ("ghostty_ambiguous", {}))
-        match = here
     return ("ghostty", match[0][0], dialog), None
 
 
@@ -775,7 +776,7 @@ def _answer(pid, at, response):
         keys = keys_for(dialog, response)
     except ValueError:
         return 400, ("bad_answer", {})
-    target, error = find_terminal(pid)
+    target, error = find_terminal(pid, send=True)  # send: only DISMISSABLE dialogs, which keys_for answers anyway
     if error:
         return error
     app, terminal_id, still_open = target

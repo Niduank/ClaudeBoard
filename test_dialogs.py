@@ -70,7 +70,8 @@ def fake_board(dialog):
     calls = []
     server._answered.clear()
     server.scan = lambda: {"sessions": [{"pid": 7, "sessionId": "s1", "dialog": dialog}]}
-    server.find_terminal = lambda pid, send=False: (("ghostty", "T1", True), None)
+    # an answer types keys: it asks for a terminal to send to (Ghostty's same-title refusal)
+    server.find_terminal = lambda pid, send=False: (("ghostty", "T1", True), None) if send else (None, (500, ("not_send", {})))
     server.osascript = lambda script, *args: calls.append((script, args)) or type("Done", (), {"returncode": 0})()
     return calls
 
@@ -134,12 +135,14 @@ def test_find_terminal_ghostty():
     server.scan = lambda: {"sessions": [{"pid": 7, "name": "s", "kind": "interactive", "status": "idle", "cwd": "/a"}]}
     server.terminal_of = lambda pid: ("ghostty", 1, "")
     server.ghostty_terminals = lambda: [["T1", "✳ s", "/b"], ["T2", "✳ s", "/c"]]
-    assert server.find_terminal(7) == (None, (409, ("ghostty_ambiguous", {})))
+    assert server.find_terminal(7, send=True) == (None, (409, ("ghostty_ambiguous", {})))
+    # a focus types nothing: the first of them
+    assert server.find_terminal(7) == (("ghostty", "T1", False), None)
     # same title twice, but only one of them in the session's folder
     server.ghostty_terminals = lambda: [["T1", "✳ s", "/a"], ["T2", "✳ s", "/b"], ["T3", "x", "/z"]]
     assert server.find_terminal(7) == (("ghostty", "T1", False), None)
     server.ghostty_terminals = lambda: [["T1", "✳ s", "/b"], ["T2", "✳ s", "/b"], ["T3", "x", "/a"]]
-    assert server.find_terminal(7)[1][0] == 409
+    assert server.find_terminal(7, send=True)[1][0] == 409
     server.ghostty_terminals = lambda: [["T1", "✳ s", "/a"], ["T2", "✳ other", "/b"]]
     assert server.find_terminal(7) == (("ghostty", "T1", False), None)
 
