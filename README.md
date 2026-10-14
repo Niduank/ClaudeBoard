@@ -156,13 +156,22 @@ The page drives Ghostty and iTerm2. Each session's terminal is read from its pro
   and closes its tab; a background session is stopped with `claude stop`. The conversation stays resumable.
   The shell is found from the process tree, never from a title: two sessions can share a name.
   A session outside a Ghostty or iTerm2 tab is not closed from the page.
+- *Answer* a dialog the hook saw, from the dialog box: the page replays the keystrokes in the terminal, after the same
+  2 second delay and with the same "Undo". A question's options are buttons: with one single-choice question a click
+  answers; otherwise toggle the options, then *Send choices*. A permission has *Allow once* / *Deny*, a plan
+  *Approve (terminal option 1)* / *Deny* (option 1 also sets the mode: "Yes, and use auto mode", or "switch to BYPASS
+  PERMISSIONS" in a session started with `--dangerously-skip-permissions`, as *New session* does);
+  *Deny* only when several dialogs were asked at once, the terminal may show another one.
+  Free text and "deny with an instruction" go through the reply field (Escape, then the text). Answers and replies are sent
+  one at a time. Keystrokes were measured in Ghostty only; iTerm2's are untested live.
+- Ghostty: when several terminals have the session's title, replies and answers are refused unless exactly one is in the
+  session's folder (it would type into the wrong tab).
 - Background sessions (`claude --bg`) have no terminal: open and reply are disabled for them.
 - A reply while a dialog is open in the session (permission, question, plan; `status: "waiting"`) first presses
   Escape, which dismisses the dialog ("no / cancel"), then sends the text: Enter alone would answer the dialog,
   often with "Yes". The card shows what the dialog asks: the question and its choices, the command to allow,
   or the plan to approve (stored by the dialog hook as the dialog opens: Claude Code writes the tool call
-  to the transcript only once it is answered). A question's choices are buttons: with one single-choice question
-  a click sends that choice; otherwise the clicks fill the reply, sent with *Send*. Other dialogs (`waitingFor: "dialog open"`, such as usage
+  to the transcript only once it is answered). Other dialogs (`waitingFor: "dialog open"`, such as usage
   credits or managed settings) are answered in the terminal: Escape may not close them.
 
 ## Access from the iPhone (Tailscale)
@@ -206,6 +215,7 @@ from their environment). Runs happen in `summarizer/`, which is filtered out of 
 | `server.py` | HTTP server, session scan, summaries, Ghostty and iTerm2 AppleScript, session close, Tailscale keep-alive |
 | `page.html` | The single page (vanilla JS, no build step); `__TOKEN__` is replaced on each request |
 | `install.sh` | Install, reinstall, `--uninstall`; writes the LaunchAgent and the dialog hook |
+| `test_dialogs.py` | Tests of the dialog answers (`python3 test_dialogs.py`, plain asserts) |
 | `board_dialog_hook.py` | Claude Code `PermissionRequest` hook: stores what an opening dialog asks in `dialogs/`; never answers it (no output) |
 | `install/sessions-web.md` | The `/sessions-web` Claude Code command template (`__REPO__`) |
 | `assets/logo.svg` | The logo: favicon (the number of sessions waiting for you is drawn on it), README, home screen |
@@ -222,8 +232,12 @@ Runtime files (git-ignored, personal to the Mac): `summaries.json`, `server.log`
 | GET | `/api/history?pid=<pid>` | | `{"items": [...]}`, the drawer conversation |
 | POST | `/api/focus` | `{"pid": 123}` | `{"message": "..."}` |
 | POST | `/api/reply` | `{"pid": 123, "text": "..."}` | `{"message": "..."}` |
+| POST | `/api/answer` | `{"pid": 123, "at": 1760000000000, "answer": ...}`, `at` = the dialog's `at`; `answer` = `{"choices": [[0], [1, 2]]}` (0-based, per question) or `{"decision": "allow"\|"deny"}` | `{"message": "..."}` |
 | POST | `/api/new` | `{"cwd": "/path"}`, a live session's folder or a subfolder of a project root | `{"message": "..."}` |
 | POST | `/api/close` | `{"pid": 123}` | `{"message": "..."}` |
+
+`/api/answer` returns 400 for an invalid answer (also outside Claude Code's 1-4 questions / 2-4 options), 404 for an unknown
+session, 409 when the dialog changed, was already answered or closed, or the Ghostty tab is ambiguous, 500 when the terminal refuses.
 
 POSTs need `Content-Type: application/json` and the `X-Board-Token` header embedded in the page.
 
@@ -247,7 +261,12 @@ Four values come from the environment, which `install.sh` writes under `Environm
   The tailnet name is accepted only when Tailscale names the owner's login.
 - Every POST needs a per-launch random token embedded in the page; a stale page reloads itself.
 - Replies are typed into the terminal as an argv item, never interpolated into a script; each send is logged
-  (time, session, terminal, never the text) in `server.log`.
+  (time, session, terminal, never the text) in `server.log`; so is each answer (`answer pid=… … ok=…`, never option labels).
+- An answer must carry the `at` of the dialog the page shows; it is refused unless that is still the session's latest hook
+  write, not yet answered from the page (once per dialog), and the session still `waiting`. Limits: when several
+  permissions are asked at once (parallel tool calls), the page shows the last one while the terminal may show another,
+  so it offers *Deny* only; a dialog that wrote no hook file, opened within 5 s of the previous one, could show that
+  previous dialog.
 - Summaries run `claude -p` with Haiku, no tools, no user settings, hooks, plugins or MCP servers, and no session persistence.
 - The page shows prompts and answers of every session: anyone who can open it can read them.
 - The dialog hook only writes what a dialog asks to `dialogs/` (in the repo, git-ignored); it prints nothing,

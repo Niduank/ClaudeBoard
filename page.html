@@ -206,6 +206,9 @@ h2 .count { background: var(--surface); border: 1px solid var(--line); border-ra
 .card .dialogbox .plan { max-height: 12em; overflow: hidden; }
 .dopts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .dopt { padding: 2px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--bar); font: inherit; font-size: 12.5px; color: var(--text); cursor: pointer; }
+.dialogbox .dact { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.dialogbox .dnote { align-self: center; font-size: 12px; }
+.btn:disabled, .dopt:disabled { opacity: .6; cursor: default; }
 .dopt:hover { border-color: var(--wait); }
 .dopt.on { background: var(--wait); border-color: var(--wait); color: var(--surface); }
 .reply .dialog { flex: 1 1 100%; color: var(--muted); font-size: 13px; }
@@ -290,6 +293,8 @@ const STR = {
     since: m => m < 1 ? 'for <1 min' : m < 60 ? `for ${m} min` : m < 1440 ? `for ${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `for ${Math.floor(m / 1440)} d`,
     closedSession: 'a closed session', bgNoTerminal: 'Background session: no terminal to open', unreachable: 'Server unreachable',
     sendCancelled: 'Send cancelled', undo: 'Undo (Esc)', sendingTo: name => `Sending to ${name}…`, reply: 'Reply',
+    answering: name => `Answering ${name}…`, sendChoices: 'Send choices', allowOnce: 'Allow once', deny: 'Deny', approvePlan: 'Approve (terminal option 1)',
+    several: 'Several permissions asked at once: allow them in the terminal',
     replyPh: key => key ? `Your reply… (${key} sends)` : 'Your reply…', replyTo: name => `Reply to ${name}`, send: 'Send', cancel: 'Cancel',
     viewDetail: name => `Show the details of ${name}`, theTerminal: 'the terminal',
     openTitle: app => `Open in ${app} (o, or ⌘-click the card)`, openLabel: (name, app) => `Open ${name} in ${app}`, openIn: app => `Open in ${app} ↗`,
@@ -325,6 +330,8 @@ const STR = {
     since: m => m < 1 ? 'depuis <1 min' : m < 60 ? `depuis ${m} min` : m < 1440 ? `depuis ${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `depuis ${Math.floor(m / 1440)} j`,
     closedSession: 'une session fermée', bgNoTerminal: 'Session en arrière-plan : pas de terminal à ouvrir', unreachable: 'Serveur injoignable',
     sendCancelled: 'Envoi annulé', undo: 'Annuler (Échap)', sendingTo: name => `Envoi à ${name}…`, reply: 'Répondre',
+    answering: name => `Réponse à ${name}…`, sendChoices: 'Envoyer les choix', allowOnce: 'Autoriser une fois', deny: 'Refuser', approvePlan: 'Approuver (option 1 du terminal)',
+    several: 'Plusieurs permissions demandées en même temps : autorise-les dans le terminal',
     replyPh: key => key ? `Ta réponse… (${key} envoie)` : 'Ta réponse…', replyTo: name => `Répondre à ${name}`, send: 'Envoyer', cancel: 'Annuler',
     viewDetail: name => `Voir le détail de ${name}`, theTerminal: 'le terminal',
     openTitle: app => `Ouvrir dans ${app} (o, ou ⌘-clic sur la carte)`, openLabel: (name, app) => `Ouvrir ${name} dans ${app}`, openIn: app => `Ouvrir dans ${app} ↗`,
@@ -385,7 +392,7 @@ const post = async (path, body) => {
   return r
 }
 const expanded = new Set(), openAgents = new Set(), replies = new Map()
-const picks = new Map()  // pid -> the choices clicked in an open question: { at (the dialog), sel: one Set of labels per question }
+const picks = new Map()  // pid -> the choices clicked in an open question: { at (the dialog), sel: one Set of option indices per question }
 let data = null, lastJson = '', previous = null
 
 // ---------- formatting ----------
@@ -571,6 +578,22 @@ async function sendReply(s, text) {
   draw(); if (replies.has(s.pid)) focusReply(s.pid)
   if (detailPid === s.pid) loadHistory()
 }
+// answers the open dialog for real (keystrokes replayed by the server); the dialog is identified by its "at"
+async function sendAnswer(s, answer) {
+  if (sending.has(s.pid)) return
+  sending.add(s.pid)
+  const at = s.dialog.at
+  try {
+    if (await undoable(t('answering', s.name), UNDO_MS)) {
+      const r = await post('/api/answer', { pid: s.pid, at, answer })
+      toast((await r.json()).message)
+      if (r.ok) { picks.delete(s.pid); markRead(s) }  // a 409: the next poll redraws with the dialog as it is now
+    }
+  } catch { toast(t('unreachable')) }
+  finally { sending.delete(s.pid) }
+  draw()
+  if (detailPid === s.pid) loadHistory()
+}
 // a send shortcut only where there is a hardware keyboard; ⌘ on Apple, Ctrl elsewhere
 const SEND_KEY = matchMedia('(pointer: coarse)').matches ? '' : /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘↵' : 'Ctrl+↵'
 function replyBox(s) {
@@ -722,34 +745,41 @@ const pillOf = s => {
   return isTest(s) ? ['test', t('pillTest')] : isQuestion(s) ? ['ask', t('pillAsk')] : ['wait', t('pillWait')]
 }
 // what the open dialog asks, stored by the server's PermissionRequest hook (board_dialog_hook.py) as it opened
+const canAnswer = s => s.kind !== 'bg' && s.terminal && s.dialog?.at
 function dialogBox(s) {
   if (s.status !== 'waiting') return null
   const tool = s.dialog || {}
+  const can = canAnswer(s)
+  const btn = (label, run, primary, off) => h('button', { class: 'btn' + (primary ? ' primary' : ''), disabled: !!off, onclick: e => { e.stopPropagation(); run() } }, label)
   if (tool.questions?.length) {
     const pick = picks.get(s.pid)?.at === tool.at ? picks.get(s.pid) : null
+    const one = tool.questions.length === 1 && !tool.questions[0].multiSelect
+    const ready = !!pick && pick.sel.every(x => x.size)
     return h('div', { class: 'dialogbox' }, h('div', { class: 'dt' }, t('dialogAsk')),
       ...tool.questions.map((q, i) => h('div', { class: 'dq' }, h('div', {}, q.question),
-        q.options.length > 0 && h('div', { class: 'dopts' }, ...q.options.map(o => h('button', {
-          class: 'dopt' + (pick?.sel[i].has(o) ? ' on' : ''), 'aria-pressed': String(!!pick?.sel[i].has(o)),
-          onclick: e => { e.stopPropagation(); pickOption(s, tool, i, o) } }, o))))))
+        q.options.length > 0 && h('div', { class: 'dopts' }, ...q.options.map((o, k) => h('button', {
+          class: 'dopt' + (pick?.sel[i].has(k) ? ' on' : ''), 'aria-pressed': String(!!pick?.sel[i].has(k)), disabled: !can,
+          onclick: e => { e.stopPropagation(); pickOption(s, tool, i, k) } }, o))))),
+      can && !one && h('div', { class: 'dact' }, btn(t('sendChoices'), () => sendAnswer(s, { choices: tool.questions.map((_, j) => [...pick.sel[j]]) }), true, !ready)))
   }
+  // several asked at once: the terminal may show another one than this, so only Deny (Escape) is safe
+  const acts = can && h('div', { class: 'dact' }, !tool.several && btn(tool.tool === 'ExitPlanMode' ? t('approvePlan') : t('allowOnce'), () => sendAnswer(s, { decision: 'allow' }), true),
+    btn(t('deny'), () => sendAnswer(s, { decision: 'deny' })), tool.several && h('span', { class: 'dnote' }, t('several')))
   if (tool.tool === 'ExitPlanMode') return h('div', { class: 'dialogbox' }, h('div', { class: 'dt' }, t('dialogPlan')),
-    Object.assign(h('div', { class: 'md plan' }), { innerHTML: md(tool.detail || '') }))
+    Object.assign(h('div', { class: 'md plan' }), { innerHTML: md(tool.detail || '') }), acts)
   const [title, body] = tool.tool ? [t('dialogPermission'), [toolName(tool.tool), tool.detail].filter(Boolean).join(' · ')]
     : [t('dialogOther'), s.waitingFor]
-  return h('div', { class: 'dialogbox' }, h('div', { class: 'dt' }, title), body && h('div', { class: 'dcmd' }, body))
+  return h('div', { class: 'dialogbox' }, h('div', { class: 'dt' }, title), body && h('div', { class: 'dcmd' }, body), tool.tool && acts)
 }
-// a choice is sent as the reply text (the server closes the dialog first); with one single-choice question
-// a click sends it, otherwise the clicks compose the reply, sent with the Send button
-function pickOption(s, tool, i, label) {
+// one single-choice question: a click answers; otherwise clicks toggle option indices, sent with "Send choices"
+function pickOption(s, tool, i, k) {
   const qs = tool.questions
-  if (qs.length === 1 && !qs[0].multiSelect) return sendReply(s, label)
+  if (qs.length === 1 && !qs[0].multiSelect) return sendAnswer(s, { choices: [[k]] })
   if (picks.get(s.pid)?.at !== tool.at) picks.set(s.pid, { at: tool.at, sel: qs.map(() => new Set()) })
   const sel = picks.get(s.pid).sel[i]
-  if (sel.has(label)) sel.delete(label)
-  else { if (!qs[i].multiSelect) sel.clear(); sel.add(label) }
-  const text = qs.map((q, j) => picks.get(s.pid).sel[j].size ? `${q.question} ${[...picks.get(s.pid).sel[j]].join(', ')}` : '').filter(Boolean).join('\n')
-  replies.set(s.pid, { text }); draw(); focusReply(s.pid)
+  if (sel.has(k)) sel.delete(k)
+  else { if (!qs[i].multiSelect) sel.clear(); sel.add(k) }
+  draw()
 }
 const activityLine = s => bucket(s) === 'run' && s.lastTool && h('div', { class: 'activity', title: `${s.lastTool.name} · ${s.lastTool.detail}` },
   h('i'), h('span', { class: 'tool' }, toolName(s.lastTool.name)), h('span', { class: 'det' }, s.lastTool.detail),
@@ -1014,8 +1044,9 @@ async function poll() {
     const key = JSON.stringify(json)
     // ponytail: "typing" = window focused and a key in the reply field within 15 s; a pause longer than that gets a redraw
     const typingReply = document.hasFocus() && document.activeElement?.closest?.('.reply') && Date.now() - lastReplyKey < 15000
-    // page.html changed on the server: reload, unless a reply is being written or sent (it would be lost)
-    if (json.page !== PAGE && !sending.size && ![...replies.values()].some(r => r.text.trim())) return location.reload()
+    // page.html changed on the server: reload, unless a reply is being written or sent, or options picked in a dialog still open (it would be lost)
+    const picking = [...picks].some(([pid, p]) => p.sel.some(x => x.size) && json.sessions.some(s => s.pid === pid && s.dialog?.at === p.at))
+    if (json.page !== PAGE && !sending.size && !picking && ![...replies.values()].some(r => r.text.trim())) return location.reload()
     if (key !== lastJson && !typingReply) { lastJson = key; draw() } else tick()
     if (detailPid != null) loadHistory()
   } catch {

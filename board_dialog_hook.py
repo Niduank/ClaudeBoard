@@ -37,9 +37,18 @@ try:
     path = os.path.join(folder, os.path.basename(str(event["session_id"])) + ".json")
     # ponytail: one file per session; parallel calls that all need permission show the last one asked,
     # while the terminal may show the first. Each writes its own temp file, so none is torn
+    dialog = {"at": now * 1000, "tool": str(event.get("tool_name", "")), "input": kept}
+    # another dialog asked under 2 s ago: parallel requests, the page then offers Deny only
+    try:
+        with open(path) as f:
+            last = json.load(f)
+        if dialog["at"] - last["at"] < 2000 and (last["tool"], last["input"]) != (dialog["tool"], kept):
+            dialog["several"] = True
+    except Exception:
+        pass
     tmp = f"{path}.{os.getpid()}.tmp"
     with open(tmp, "w") as f:
-        json.dump({"at": now * 1000, "tool": str(event.get("tool_name", "")), "input": kept}, f)
+        json.dump(dialog, f)
     os.replace(tmp, path)
 except Exception:
     pass

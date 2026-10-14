@@ -72,7 +72,10 @@ MESSAGES = {
            "stop_timeout": "claude stop does not answer", "stop_refused": "claude stop refused to stop it",
            "close_no_terminal": "Session outside a Ghostty or iTerm2 terminal: close it in its terminal",
            "closed": "Session closed", "close_failed": "The session did not stop", "bad_request": "Invalid request",
-           "terminal_timeout": "The terminal does not answer"},
+           "terminal_timeout": "The terminal does not answer",
+           "answer_changed": "The prompt changed: the page is updating", "bad_answer": "Invalid answer",
+           "ghostty_ambiguous": "Several Ghostty terminals share this name: answer in the terminal",
+           "answered": "Answer sent", "answer_refused": "{app} refused the answer"},
     "fr": {"not_found": "Session introuvable", "bg": "Session en arrière-plan, sans terminal",
            "dialog": "Une validation est ouverte : réponds dans le terminal", "no_terminal": "Session hors d'un terminal Ghostty ou iTerm2",
            "ghostty_missing": "Terminal Ghostty introuvable", "opened": "Ouvert dans {app}", "focus_refused": "{app} a refusé le focus",
@@ -81,7 +84,10 @@ MESSAGES = {
            "stop_timeout": "claude stop ne répond pas", "stop_refused": "claude stop a refusé l'arrêt",
            "close_no_terminal": "Session hors d'un terminal Ghostty ou iTerm2 : ferme-la dans son terminal",
            "closed": "Session fermée", "close_failed": "La session ne s'est pas arrêtée", "bad_request": "Requête invalide",
-           "terminal_timeout": "Le terminal ne répond pas"},
+           "terminal_timeout": "Le terminal ne répond pas",
+           "answer_changed": "La validation a changé : la page se met à jour", "bad_answer": "Réponse invalide",
+           "ghostty_ambiguous": "Plusieurs terminaux Ghostty portent ce nom : réponds dans le terminal",
+           "answered": "Réponse envoyée", "answer_refused": "{app} a refusé la réponse"},
 }
 NEW_SESSION_INPUT = "claude --dangerously-skip-permissions\n"
 # Terminal apps the board drives; "New session" opens in BOARD_TERMINAL ("ghostty" by default, or "iterm")
@@ -230,11 +236,49 @@ def open_dialog(session_id, waiting_since):
         return {"tool": tool, "at": dialog["at"], "questions": [{"question": str(q.get("question", "")), "multiSelect": q.get("multiSelect") is True,
                                              "options": [str(o.get("label", "")) for o in q.get("options") or [] if isinstance(o, dict)][:8]}
                                             for q in questions]}
+    # several dialogs asked at once (board_dialog_hook.py): the terminal may show another one than this
+    several = {"several": True} if dialog.get("several") is True else {}
     if tool == "ExitPlanMode":
-        return {"tool": tool, "detail": re.sub(r"<!--.*?-->", "", str(args.get("plan", "")), flags=re.S).strip()}
+        return {"tool": tool, "at": dialog["at"], "detail": re.sub(r"<!--.*?-->", "", str(args.get("plan", "")), flags=re.S).strip(), **several}
     # the command itself is what gets approved, not its description
     detail = " ".join(str(args["command"]).split()) if tool == "Bash" and "command" in args else tool_detail(tool, args)
-    return {"tool": tool, "detail": detail}
+    return {"tool": tool, "at": dialog["at"], "detail": detail, **several}
+
+
+def keys_for(dialog, answer):
+    """The keystrokes that give `answer` to the open dialog: ("choice", digit) or ("key", name) actions. ValueError if invalid.
+
+    Permission and plan: 1 is "Yes" (the other rows vary: auto mode, "always allow"), Escape refuses. A question: a digit
+    picks a single-choice option and moves on; in a multi-select one digits toggle and the right arrow moves on; several
+    questions, or a multi-select one, end on a review tab where 1 submits.
+    """
+    if not isinstance(answer, dict):
+        raise ValueError("answer")
+    if dialog["tool"] != "AskUserQuestion":
+        decision = answer.get("decision")
+        if decision == "allow" and not dialog.get("several"):
+            return [("choice", "1")]
+        if decision == "deny":
+            return [("key", "escape")]
+        raise ValueError("decision")
+    questions, choices = dialog.get("questions"), answer.get("choices")
+    # Claude Code's AskUserQuestion schema allows 1-4 questions of 2-4 options and rejects any other call before a dialog opens:
+    # outside it, open_dialog's clipping (4 questions, 8 options) or filtering could show a dialog that is not the real one
+    if not questions or len(questions) > 4 or not isinstance(choices, list) or len(choices) != len(questions):
+        raise ValueError("choices")
+    keys = []
+    for q, picked in zip(questions, choices):
+        n = len(q["options"])
+        if not 2 <= n <= 4 or not isinstance(picked, list) or not picked or (len(picked) > 1 and not q["multiSelect"]):
+            raise ValueError("question")
+        if not all(type(i) is int and 0 <= i < n for i in picked) or len(set(picked)) != len(picked):
+            raise ValueError("options")
+        keys += [("choice", str(i + 1)) for i in picked]
+        if q["multiSelect"]:
+            keys.append(("key", "arrowRight"))
+    if len(questions) > 1 or any(q["multiSelect"] for q in questions):
+        keys.append(("choice", "1"))
+    return keys
 
 
 AGENT_ID = re.compile(r"a[0-9a-f]{16}")
@@ -415,6 +459,7 @@ def scan():
                 "pid": r["pid"],
                 "sessionId": r["sessionId"],
                 "name": info.get("title") or r.get("name") or r["sessionId"][:8],
+                "titled": bool(info.get("title")),
                 "kind": r.get("kind", "?"),
                 "status": r.get("status", "?"),
                 "waitingFor": r.get("waitingFor"),  # with status "waiting": a dialog (permission, question) is open
@@ -582,8 +627,18 @@ def find_terminal(pid, send=False):
     match = [t for t in terminals if strip(t[1]) == session["name"]]
     if not match:
         match = [t for t in terminals if t[2] == session["cwd"]]
+        if len(match) > 1 and not session["titled"]:
+            # until its first exchange names it, Claude Code titles a session's terminal "Claude Code", not the board's name
+            match = [t for t in match if strip(t[1]) == "Claude Code"]
         if len(match) != 1:
             return None, (404, ("ghostty_missing", {}))
+    elif len(match) > 1:
+        # same title twice: only a folder shared with exactly one of them tells which is ours (a focus types nothing: the first)
+        here = [t for t in terminals if t[2] == session["cwd"]]
+        if len(here) == 1 and here[0] in match:
+            match = here
+        elif send:
+            return None, (409, ("ghostty_ambiguous", {}))
     return ("ghostty", match[0][0], dialog), None
 
 
@@ -627,6 +682,27 @@ end if
 tell s to write text ((character id 27) & "[200~" & (item 2 of argv) & (character id 27) & "[201~") newline no
 delay 0.15
 tell s to write text ""'''}
+# a dialog answer: argv = terminal, then one key per item, each played 0.2 s apart so the dialog redraws in between
+KEYS = {"ghostty": '''on run argv
+tell application "Ghostty"
+set t to terminal id (item 1 of argv)
+repeat with i from 2 to (count of argv)
+send key (item i of argv) to t
+delay 0.2
+end repeat
+end tell
+end run''',
+        # iTerm2 gets every key as text: its terminal sequence (KEY_TEXT), digits as they are
+        "iterm": ITERM_SESSION % '''repeat with i from 2 to (count of argv)
+tell s to write text (item i of argv) newline no
+delay 0.2
+end repeat'''}
+KEY_TEXT = {"escape": "\x1b", "arrowRight": "\x1b[C"}
+GHOSTTY_DIGIT = "numpad{}"  # Ghostty's `input text` is a paste, which a dialog ignores for a choice
+_answer_lock = threading.Lock()  # answers run one at a time, so the check on _answered below cannot race
+# ponytail: one lock for every session: a hung terminal delays the others, per-terminal locks if that bites
+# ponytail: (session, at) of dialogs already answered, kept for the process life (a few bytes each); trim if the server runs for months
+_answered = set()
 NEW = {"ghostty": '''on run argv
 tell application "Ghostty"
 set cfg to {initial working directory:(item 1 of argv), initial input:(item 2 of argv)}
@@ -663,6 +739,11 @@ def focus(pid):
 
 
 def reply(pid, text):
+    with _answer_lock:  # never interleave its keys with an answer's in one terminal
+        return _reply(pid, text)
+
+
+def _reply(pid, text):
     text = "\n".join(" ".join(line.split()) for line in str(text).splitlines()).strip()
     # no control characters: an escape sequence in the text could end the paste early and submit the rest as typed keys
     text = re.sub(r"[\x00-\x09\x0b-\x1f\x7f]", "", text)
@@ -679,6 +760,46 @@ def reply(pid, text):
     sys.stderr.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} reply pid={pid} session={_names.get(pid)!r} terminal={app}:{terminal_id}{' dialog=1' if dialog else ''} ok={ok}\n")
     sys.stderr.flush()
     return (200, ("sent", {})) if ok else (500, ("send_refused", {"app": TERMINALS[app]}))
+
+
+def answer(pid, at, response):
+    """Answers the dialog a session shows by replaying its keystrokes; `at` names the dialog the page was showing."""
+    with _answer_lock:
+        return _answer(pid, at, response)
+
+
+def _answer(pid, at, response):
+    session = next((s for s in scan()["sessions"] if s["pid"] == pid), None)
+    if session is None:
+        return 404, ("not_found", {})
+    dialog = session.get("dialog")
+    # the page may show a dialog answered since in the terminal: never type into the next one.
+    # Claude Code may not have updated the status yet when a second device answers the same dialog
+    if not dialog or dialog.get("at") != at or (session["sessionId"], at) in _answered:
+        return 409, ("answer_changed", {})
+    try:
+        keys = keys_for(dialog, response)
+    except ValueError:
+        return 400, ("bad_answer", {})
+    target, error = find_terminal(pid, send=True)  # send: only DISMISSABLE dialogs, which keys_for answers anyway
+    if error:
+        return error
+    app, terminal_id, still_open = target
+    # ponytail: only the status is re-read, not the dialog's at: a dialog replaced within this window would get the keys
+    if not still_open:  # the status left "waiting" since the first scan
+        return 409, ("answer_changed", {})
+    if app == "ghostty":
+        args = [GHOSTTY_DIGIT.format(value) if kind == "choice" else value for kind, value in keys]
+    else:
+        args = [KEY_TEXT[value] if kind == "key" else value for kind, value in keys]
+    ok = osascript(KEYS[app], terminal_id, *args).returncode == 0
+    if ok:
+        _answered.add((session["sessionId"], at))
+    # an audit line per answer (never the option labels)
+    what = response.get("decision") or f"choices={len(response.get('choices') or [])}"
+    sys.stderr.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} answer pid={pid} session={_names.get(pid)!r} tool={dialog['tool']} {what} terminal={app}:{terminal_id} ok={ok}\n")
+    sys.stderr.flush()
+    return (200, ("answered", {})) if ok else (500, ("answer_refused", {"app": TERMINALS[app]}))
 
 
 def folders():
@@ -787,6 +908,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         routes = {"/api/focus": lambda b: focus(int(b["pid"])), "/api/reply": lambda b: reply(int(b["pid"]), b["text"]),
+                  "/api/answer": lambda b: answer(int(b["pid"]), b["at"], b["answer"]),
                   "/api/new": lambda b: new_session(str(b["cwd"])), "/api/close": lambda b: close_session(int(b["pid"]))}
         token = self.headers.get("X-Board-Token", "")
         if (not self.trusted() or self.headers.get("Content-Type") != "application/json" or self.path not in routes
