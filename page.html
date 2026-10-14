@@ -207,6 +207,7 @@ h2 .count { background: var(--surface); border: 1px solid var(--line); border-ra
 .dopts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .dopt { padding: 2px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--bar); font: inherit; font-size: 12.5px; color: var(--text); cursor: pointer; }
 .dialogbox .dact { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.dialogbox .dnote { align-self: center; font-size: 12px; }
 .btn:disabled, .dopt:disabled { opacity: .6; cursor: default; }
 .dopt:hover { border-color: var(--wait); }
 .dopt.on { background: var(--wait); border-color: var(--wait); color: var(--surface); }
@@ -293,6 +294,7 @@ const STR = {
     closedSession: 'a closed session', bgNoTerminal: 'Background session: no terminal to open', unreachable: 'Server unreachable',
     sendCancelled: 'Send cancelled', undo: 'Undo (Esc)', sendingTo: name => `Sending to ${name}…`, reply: 'Reply',
     answering: name => `Answering ${name}…`, sendChoices: 'Send choices', allowOnce: 'Allow once', deny: 'Deny', approvePlan: 'Approve (auto mode if available)',
+    several: 'Several permissions asked at once: allow them in the terminal',
     replyPh: key => key ? `Your reply… (${key} sends)` : 'Your reply…', replyTo: name => `Reply to ${name}`, send: 'Send', cancel: 'Cancel',
     viewDetail: name => `Show the details of ${name}`, theTerminal: 'the terminal',
     openTitle: app => `Open in ${app} (o, or ⌘-click the card)`, openLabel: (name, app) => `Open ${name} in ${app}`, openIn: app => `Open in ${app} ↗`,
@@ -329,6 +331,7 @@ const STR = {
     closedSession: 'une session fermée', bgNoTerminal: 'Session en arrière-plan : pas de terminal à ouvrir', unreachable: 'Serveur injoignable',
     sendCancelled: 'Envoi annulé', undo: 'Annuler (Échap)', sendingTo: name => `Envoi à ${name}…`, reply: 'Répondre',
     answering: name => `Réponse à ${name}…`, sendChoices: 'Envoyer les choix', allowOnce: 'Autoriser une fois', deny: 'Refuser', approvePlan: 'Approuver (mode auto si disponible)',
+    several: 'Plusieurs permissions demandées en même temps : autorise-les dans le terminal',
     replyPh: key => key ? `Ta réponse… (${key} envoie)` : 'Ta réponse…', replyTo: name => `Répondre à ${name}`, send: 'Envoyer', cancel: 'Annuler',
     viewDetail: name => `Voir le détail de ${name}`, theTerminal: 'le terminal',
     openTitle: app => `Ouvrir dans ${app} (o, ou ⌘-clic sur la carte)`, openLabel: (name, app) => `Ouvrir ${name} dans ${app}`, openIn: app => `Ouvrir dans ${app} ↗`,
@@ -759,8 +762,9 @@ function dialogBox(s) {
           onclick: e => { e.stopPropagation(); pickOption(s, tool, i, k) } }, o))))),
       can && !one && h('div', { class: 'dact' }, btn(t('sendChoices'), () => sendAnswer(s, { choices: tool.questions.map((_, j) => [...pick.sel[j]]) }), true, !ready)))
   }
-  const acts = can && h('div', { class: 'dact' }, btn(tool.tool === 'ExitPlanMode' ? t('approvePlan') : t('allowOnce'), () => sendAnswer(s, { decision: 'allow' }), true),
-    btn(t('deny'), () => sendAnswer(s, { decision: 'deny' })))
+  // several asked at once: the terminal may show another one than this, so only Deny (Escape) is safe
+  const acts = can && h('div', { class: 'dact' }, !tool.several && btn(tool.tool === 'ExitPlanMode' ? t('approvePlan') : t('allowOnce'), () => sendAnswer(s, { decision: 'allow' }), true),
+    btn(t('deny'), () => sendAnswer(s, { decision: 'deny' })), tool.several && h('span', { class: 'dnote' }, t('several')))
   if (tool.tool === 'ExitPlanMode') return h('div', { class: 'dialogbox' }, h('div', { class: 'dt' }, t('dialogPlan')),
     Object.assign(h('div', { class: 'md plan' }), { innerHTML: md(tool.detail || '') }), acts)
   const [title, body] = tool.tool ? [t('dialogPermission'), [toolName(tool.tool), tool.detail].filter(Boolean).join(' · ')]

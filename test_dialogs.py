@@ -2,6 +2,9 @@
 #  Checks for answering Claude Code dialogs from the board: python3 test_dialogs.py
 import json
 import os
+import shutil
+import subprocess
+import sys
 import tempfile
 
 import server
@@ -36,6 +39,10 @@ def test_keys_permission_and_plan():
         assert server.keys_for(dialog, {"decision": "allow"}) == [("choice", "1")]
         assert server.keys_for(dialog, {"decision": "deny"}) == [("key", "escape")]
         assert raises(dialog, {"decision": "always"})
+        # several asked at once: the terminal may show another one, only Deny
+        several = dict(dialog, several=True)
+        assert raises(several, {"decision": "allow"})
+        assert server.keys_for(several, {"decision": "deny"}) == [("key", "escape")]
 
 
 def test_keys_invalid():
@@ -145,6 +152,24 @@ def test_open_dialog_at():
         json.dump({"tool": tool, "input": args, "at": 1234}, open(f"{server.HERE}/dialogs/s1.json", "w"))
         dialog = server.open_dialog("s1", 1234)
         assert dialog["at"] == 1234 and dialog["tool"] == tool
+        assert "several" not in dialog
+    json.dump({"tool": "Bash", "input": {"command": "ls"}, "at": 1234, "several": True}, open(f"{server.HERE}/dialogs/s1.json", "w"))
+    assert server.open_dialog("s1", 1234)["several"] is True
+
+
+def test_hook_several():
+    """The hook writes next to its own file: run a copy of it in a temp folder."""
+    folder = tempfile.mkdtemp()
+    hook = shutil.copy(os.path.join(os.path.dirname(os.path.abspath(__file__)), "board_dialog_hook.py"), folder)
+    run = lambda command: subprocess.run([sys.executable, hook], check=True,
+                                         input=json.dumps({"session_id": "s1", "tool_name": "Bash", "tool_input": {"command": command}}), text=True)
+    stored = lambda: json.load(open(f"{folder}/dialogs/s1.json"))
+    run("ls")
+    assert "several" not in stored()
+    run("ls")  # the same dialog again is not a second one
+    assert "several" not in stored()
+    run("pwd")
+    assert stored()["several"] is True and stored()["input"] == {"command": "pwd"}
 
 
 if __name__ == "__main__":

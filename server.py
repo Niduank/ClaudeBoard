@@ -236,11 +236,13 @@ def open_dialog(session_id, waiting_since):
         return {"tool": tool, "at": dialog["at"], "questions": [{"question": str(q.get("question", "")), "multiSelect": q.get("multiSelect") is True,
                                              "options": [str(o.get("label", "")) for o in q.get("options") or [] if isinstance(o, dict)][:8]}
                                             for q in questions]}
+    # several dialogs asked at once (board_dialog_hook.py): the terminal may show another one than this
+    several = {"several": True} if dialog.get("several") is True else {}
     if tool == "ExitPlanMode":
-        return {"tool": tool, "at": dialog["at"], "detail": re.sub(r"<!--.*?-->", "", str(args.get("plan", "")), flags=re.S).strip()}
+        return {"tool": tool, "at": dialog["at"], "detail": re.sub(r"<!--.*?-->", "", str(args.get("plan", "")), flags=re.S).strip(), **several}
     # the command itself is what gets approved, not its description
     detail = " ".join(str(args["command"]).split()) if tool == "Bash" and "command" in args else tool_detail(tool, args)
-    return {"tool": tool, "at": dialog["at"], "detail": detail}
+    return {"tool": tool, "at": dialog["at"], "detail": detail, **several}
 
 
 def keys_for(dialog, answer):
@@ -254,7 +256,7 @@ def keys_for(dialog, answer):
         raise ValueError("answer")
     if dialog["tool"] != "AskUserQuestion":
         decision = answer.get("decision")
-        if decision == "allow":
+        if decision == "allow" and not dialog.get("several"):
             return [("choice", "1")]
         if decision == "deny":
             return [("key", "escape")]
