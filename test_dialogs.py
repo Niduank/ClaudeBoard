@@ -6,8 +6,6 @@ import tempfile
 
 import server
 
-FIND_TERMINAL = server.find_terminal  # fake_board replaces it
-
 
 def question(*specs):
     """specs: number of options, or (number of options, multiSelect)"""
@@ -51,7 +49,10 @@ def test_keys_invalid():
     assert raises(question(2), {"choices": [[0, 1]]})
     assert raises(question(2), {"choices": [0]})
     assert raises(question(0), {"choices": [[0]]})
+    assert raises(question(1), {"choices": [[0]]})
+    assert raises(question(5), {"choices": [[0]]})
     assert raises(question(9), {"choices": [[0]]})
+    assert raises(question(2, 2, 2, 2, 2), {"choices": [[0]] * 5})
     assert raises({"tool": "AskUserQuestion", "at": 1, "questions": []}, {"choices": []})
     assert raises(question(2), "nope")
     assert raises({"tool": "Bash", "at": 1}, ["allow"])
@@ -107,6 +108,13 @@ def test_answer_invalid_types_nothing():
     assert calls == []
 
 
+def test_answer_dialog_closed_meanwhile():
+    calls = fake_board(question(2))
+    server.find_terminal = lambda pid, send=False: (("ghostty", "T1", False), None)
+    assert server.answer(7, 1, {"choices": [[0]]}) == (409, ("answer_changed", {}))
+    assert calls == []
+
+
 def test_answer_refused():
     fake_board(question(2))
     server.osascript = lambda script, *args: type("Done", (), {"returncode": 1})()
@@ -119,14 +127,14 @@ def test_find_terminal_ghostty():
     server.scan = lambda: {"sessions": [{"pid": 7, "name": "s", "kind": "interactive", "status": "idle", "cwd": "/a"}]}
     server.terminal_of = lambda pid: ("ghostty", 1, "")
     server.ghostty_terminals = lambda: [["T1", "✳ s", "/b"], ["T2", "✳ s", "/c"]]
-    assert FIND_TERMINAL(7) == (None, (409, ("ghostty_ambiguous", {})))
+    assert server.find_terminal(7) == (None, (409, ("ghostty_ambiguous", {})))
     # same title twice, but only one of them in the session's folder
     server.ghostty_terminals = lambda: [["T1", "✳ s", "/a"], ["T2", "✳ s", "/b"], ["T3", "x", "/z"]]
-    assert FIND_TERMINAL(7) == (("ghostty", "T1", False), None)
+    assert server.find_terminal(7) == (("ghostty", "T1", False), None)
     server.ghostty_terminals = lambda: [["T1", "✳ s", "/b"], ["T2", "✳ s", "/b"], ["T3", "x", "/a"]]
-    assert FIND_TERMINAL(7)[1][0] == 409
+    assert server.find_terminal(7)[1][0] == 409
     server.ghostty_terminals = lambda: [["T1", "✳ s", "/a"], ["T2", "✳ other", "/b"]]
-    assert FIND_TERMINAL(7) == (("ghostty", "T1", False), None)
+    assert server.find_terminal(7) == (("ghostty", "T1", False), None)
 
 
 def test_open_dialog_at():
@@ -141,6 +149,10 @@ def test_open_dialog_at():
 
 if __name__ == "__main__":
     tests = [f for name, f in sorted(globals().items()) if name.startswith("test_")]
+    saved = dict(vars(server))
     for test in tests:
-        test()
+        try:
+            test()
+        finally:  # a test replaces server functions: the next one starts from the real ones
+            vars(server).update(saved)
     print(f"{len(tests)} checks passed")

@@ -260,13 +260,14 @@ def keys_for(dialog, answer):
             return [("key", "escape")]
         raise ValueError("decision")
     questions, choices = dialog.get("questions"), answer.get("choices")
-    if not questions or not isinstance(choices, list) or len(choices) != len(questions):
+    # Claude Code's AskUserQuestion schema allows 1-4 questions of 2-4 options and rejects any other call before a dialog opens:
+    # outside it, open_dialog's clipping (4 questions, 8 options) or filtering could show a dialog that is not the real one
+    if not questions or len(questions) > 4 or not isinstance(choices, list) or len(choices) != len(questions):
         raise ValueError("choices")
     keys = []
     for q, picked in zip(questions, choices):
         n = len(q["options"])
-        # digits only reach 9, and the row after the options is free text
-        if not 0 < n < 9 or not isinstance(picked, list) or not picked or (len(picked) > 1 and not q["multiSelect"]):
+        if not 2 <= n <= 4 or not isinstance(picked, list) or not picked or (len(picked) > 1 and not q["multiSelect"]):
             raise ValueError("question")
         if not all(type(i) is int and 0 <= i < n for i in picked) or len(set(picked)) != len(picked):
             raise ValueError("options")
@@ -730,6 +731,11 @@ def focus(pid):
 
 
 def reply(pid, text):
+    with _answer_lock:  # never interleave its keys with an answer's in one terminal
+        return _reply(pid, text)
+
+
+def _reply(pid, text):
     text = "\n".join(" ".join(line.split()) for line in str(text).splitlines()).strip()
     # no control characters: an escape sequence in the text could end the paste early and submit the rest as typed keys
     text = re.sub(r"[\x00-\x09\x0b-\x1f\x7f]", "", text)
@@ -770,7 +776,9 @@ def _answer(pid, at, response):
     target, error = find_terminal(pid)
     if error:
         return error
-    app, terminal_id, _ = target
+    app, terminal_id, still_open = target
+    if not still_open:  # the status left "waiting" since the first scan
+        return 409, ("answer_changed", {})
     if app == "ghostty":
         args = [GHOSTTY_DIGIT.format(value) if kind == "choice" else value for kind, value in keys]
     else:
