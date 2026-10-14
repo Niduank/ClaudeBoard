@@ -1044,8 +1044,9 @@ async function poll() {
     const key = JSON.stringify(json)
     // ponytail: "typing" = window focused and a key in the reply field within 15 s; a pause longer than that gets a redraw
     const typingReply = document.hasFocus() && document.activeElement?.closest?.('.reply') && Date.now() - lastReplyKey < 15000
-    // page.html changed on the server: reload, unless a reply is being written or sent (it would be lost)
-    if (json.page !== PAGE && !sending.size && ![...replies.values()].some(r => r.text.trim())) return location.reload()
+    // page.html changed on the server: reload, unless a reply is being written or sent, or options picked in a dialog still open (it would be lost)
+    const picking = [...picks].some(([pid, p]) => p.sel.some(x => x.size) && json.sessions.some(s => s.pid === pid && s.dialog?.at === p.at))
+    if (json.page !== PAGE && !sending.size && !picking && ![...replies.values()].some(r => r.text.trim())) return location.reload()
     if (key !== lastJson && !typingReply) { lastJson = key; draw() } else tick()
     if (detailPid != null) loadHistory()
   } catch {
