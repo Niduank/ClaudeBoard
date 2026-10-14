@@ -74,6 +74,7 @@ MESSAGES = {
            "closed": "Session closed", "close_failed": "The session did not stop", "bad_request": "Invalid request",
            "terminal_timeout": "The terminal does not answer",
            "answer_changed": "The prompt changed: the page is updating", "bad_answer": "Invalid answer",
+           "ghostty_ambiguous": "Several Ghostty terminals share this name: answer in the terminal",
            "answered": "Answer sent", "answer_refused": "{app} refused the answer"},
     "fr": {"not_found": "Session introuvable", "bg": "Session en arrière-plan, sans terminal",
            "dialog": "Une validation est ouverte : réponds dans le terminal", "no_terminal": "Session hors d'un terminal Ghostty ou iTerm2",
@@ -85,6 +86,7 @@ MESSAGES = {
            "closed": "Session fermée", "close_failed": "La session ne s'est pas arrêtée", "bad_request": "Requête invalide",
            "terminal_timeout": "Le terminal ne répond pas",
            "answer_changed": "La validation a changé : la page se met à jour", "bad_answer": "Réponse invalide",
+           "ghostty_ambiguous": "Plusieurs terminaux Ghostty portent ce nom : réponds dans le terminal",
            "answered": "Réponse envoyée", "answer_refused": "{app} a refusé la réponse"},
 }
 NEW_SESSION_INPUT = "claude --dangerously-skip-permissions\n"
@@ -623,6 +625,12 @@ def find_terminal(pid, send=False):
         match = [t for t in terminals if t[2] == session["cwd"]]
         if len(match) != 1:
             return None, (404, ("ghostty_missing", {}))
+    elif len(match) > 1:
+        # same title twice: only a folder shared with exactly one of them tells which is ours
+        here = [t for t in terminals if t[2] == session["cwd"]]
+        if len(here) != 1 or here[0] not in match:
+            return None, (409, ("ghostty_ambiguous", {}))
+        match = here
     return ("ghostty", match[0][0], dialog), None
 
 

@@ -6,6 +6,8 @@ import tempfile
 
 import server
 
+FIND_TERMINAL = server.find_terminal  # fake_board replaces it
+
 
 def question(*specs):
     """specs: number of options, or (number of options, multiSelect)"""
@@ -111,6 +113,20 @@ def test_answer_refused():
     assert server.answer(7, 1, {"choices": [[0]]}) == (500, ("answer_refused", {"app": "Ghostty"}))
     # a refused answer may be retried
     assert server.answer(7, 1, {"choices": [[0]]})[0] == 500
+
+
+def test_find_terminal_ghostty():
+    server.scan = lambda: {"sessions": [{"pid": 7, "name": "s", "kind": "interactive", "status": "idle", "cwd": "/a"}]}
+    server.terminal_of = lambda pid: ("ghostty", 1, "")
+    server.ghostty_terminals = lambda: [["T1", "✳ s", "/b"], ["T2", "✳ s", "/c"]]
+    assert FIND_TERMINAL(7) == (None, (409, ("ghostty_ambiguous", {})))
+    # same title twice, but only one of them in the session's folder
+    server.ghostty_terminals = lambda: [["T1", "✳ s", "/a"], ["T2", "✳ s", "/b"], ["T3", "x", "/z"]]
+    assert FIND_TERMINAL(7) == (("ghostty", "T1", False), None)
+    server.ghostty_terminals = lambda: [["T1", "✳ s", "/b"], ["T2", "✳ s", "/b"], ["T3", "x", "/a"]]
+    assert FIND_TERMINAL(7)[1][0] == 409
+    server.ghostty_terminals = lambda: [["T1", "✳ s", "/a"], ["T2", "✳ other", "/b"]]
+    assert FIND_TERMINAL(7) == (("ghostty", "T1", False), None)
 
 
 def test_open_dialog_at():
