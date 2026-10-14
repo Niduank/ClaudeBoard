@@ -159,7 +159,8 @@ The page drives Ghostty and iTerm2. Each session's terminal is read from its pro
 - *Answer* a dialog the hook saw, from the dialog box: the page replays the keystrokes in the terminal, after the same
   2 second delay and with the same "Undo". A question's options are buttons: with one single-choice question a click
   answers; otherwise toggle the options, then *Send choices*. A permission has *Allow once* / *Deny*, a plan
-  *Approve (auto mode if available)* / *Deny* (approve sends option 1, "Yes, and use auto mode" when Claude Code offers it);
+  *Approve (terminal option 1)* / *Deny* (option 1 also sets the mode: "Yes, and use auto mode", or "switch to BYPASS
+  PERMISSIONS" in a session started with `--dangerously-skip-permissions`, as *New session* does);
   *Deny* only when several dialogs were asked at once, the terminal may show another one.
   Free text and "deny with an instruction" go through the reply field (Escape, then the text). Answers and replies are sent
   one at a time. Keystrokes were measured in Ghostty only; iTerm2's are untested live.
