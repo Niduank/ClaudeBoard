@@ -415,6 +415,7 @@ def scan():
                 "pid": r["pid"],
                 "sessionId": r["sessionId"],
                 "name": info.get("title") or r.get("name") or r["sessionId"][:8],
+                "titled": bool(info.get("title")),
                 "kind": r.get("kind", "?"),
                 "status": r.get("status", "?"),
                 "waitingFor": r.get("waitingFor"),  # with status "waiting": a dialog (permission, question) is open
@@ -582,6 +583,9 @@ def find_terminal(pid, send=False):
     match = [t for t in terminals if strip(t[1]) == session["name"]]
     if not match:
         match = [t for t in terminals if t[2] == session["cwd"]]
+        if len(match) > 1 and not session["titled"]:
+            # until its first exchange names it, Claude Code titles a session's terminal "Claude Code", not the board's name
+            match = [t for t in match if strip(t[1]) == "Claude Code"]
         if len(match) != 1:
             return None, (404, ("ghostty_missing", {}))
     return ("ghostty", match[0][0], dialog), None
